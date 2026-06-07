@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRRP Car Park v1.4.0 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
+  <meta name="description" content="ระบบจัดการที่จอดรถ เช็คอิน-เช็คเอาท์ คิดเงินค่าบริการ และพนักงานรายเดือนแบบเรียลไทม์">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Style Sheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Glows -->
+  <div class="glow-bg">
+    <div class="glow-circle glow-1"></div>
+    <div class="glow-circle glow-2"></div>
+  </div>
+
+  <!-- 1. LOGIN SCREEN -->
+  <div id="loginScreen" class="login-screen-overlay">
+    <div class="login-card">
+      <div class="login-logo-header">
+        <img src="logo.jpg" alt="Logo" class="brand-logo">
+        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.0</span></h2>
+        <p>ระบบจัดการและคิดเงินค่าจอดรถอัจฉริยะ</p>
+      </div>
+      
+      <form id="loginForm" onsubmit="event.preventDefault(); handleLogin();">
+        <div class="form-group">
+          <label for="loginUser">ชื่อผู้ใช้งาน</label>
+          <input type="text" id="loginUser" class="input-field" placeholder="ระบุชื่อผู้ใช้งาน..." required autocomplete="username">
+        </div>
+        
+        <div class="form-group">
+          <label for="loginPass">รหัสผ่าน</label>
+          <input type="password" id="loginPass" class="input-field" placeholder="ระบุรหัสผ่าน..." required autocomplete="current-password">
+        </div>
+        
+        <div id="loginErrorMsg" class="alert-message danger" style="display: none; margin-bottom: 12px; font-size:12.5px; padding: 10px;">
+          ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง!
+        </div>
+        
+        <button type="submit" class="btn btn-primary submit-btn">
+          เข้าสู่ระบบ (Sign In)
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. MAIN APPLICATION CONTENT -->
+  <div id="appScreen" class="app-layout" style="display: none;">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand">
+        <img src="logo.jpg" alt="Logo" class="brand-logo">
+        <div>
+          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.0</span></h1>
+          <p class="brand-sub">ระบบบริหารจัดการที่จอดรถและคำนวณค่าบริการอัจฉริยะ</p>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <!-- Session details -->
+        <div class="user-profile-pill">
+          <div class="pulse-indicator"></div>
+          <span class="user-label">ผู้บันทึก:</span>
+          <strong id="sessionUserDisplay" class="user-name">Guest</strong>
+          <span id="sessionRoleBadge" class="role-badge">User</span>
+          <button class="btn-logout" onclick="handleLogout()" title="ออกจากระบบ">
+            <svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+          </button>
+        </div>
+
+        <button id="themeToggle" class="theme-btn" title="เปลี่ยนโหมดสี">
+          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <nav class="app-navigation-tabs">
+      <button id="navTabCheckIn" class="nav-tab active" onclick="switchMainScreen('checkin')">📥 บันทึกรถเข้าอาคาร (Check-In)</button>
+      <button id="navTabCheckOut" class="nav-tab" onclick="switchMainScreen('checkout')">📤 บันทึกรถออกอาคาร (Check-Out)</button>
+      <button id="navTabExempt" class="nav-tab" onclick="switchMainScreen('exempt')" style="display: none;">🎟️ บันทึกยกเว้นค่าจอดรถ (Exempt)</button>
+      <button id="navTabDashboard" class="nav-tab" onclick="switchMainScreen('dashboard')">📊 Dashboard</button>
+      <button id="navTabMonthly" class="nav-tab" onclick="switchMainScreen('monthly')">💳 บันทึกรถรายเดือน (Monthly)</button>
+      <button id="navTabCompanies" class="nav-tab" onclick="switchMainScreen('companies')" style="display: none;">🏢 จัดการบริษัทผู้เช่า (Companies)</button>
+      <button id="navTabUsers" class="nav-tab" onclick="switchMainScreen('users')" style="display: none;">👥 จัดการผู้ใช้ระบบ (Users)</button>
+    </nav>
+
+    <!-- SCREEN 1: RECORD CHECK-IN -->
+    <section id="scrCheckIn" class="screen-panel active-screen slide-up">
+      <div class="form-container-centered">
+        <div class="workspace-panel shadow-lg" style="max-width: 550px; margin: 0 auto;">
+          <div class="panel-header">
+            <h2 class="panel-title">📥 ลงบันทึกรถเข้าอาคาร (New Vehicle Check-In)</h2>
+          </div>
+          
+          <form id="checkInForm" onsubmit="event.preventDefault(); submitCheckIn();">
+            <div class="form-group">
+              <label for="chkInPlate">ทะเบียนรถ (License Plate)*</label>
+              <input type="text" id="chkInPlate" class="input-field input-large" placeholder="ตัวอย่าง: 1กก1111 กรุงเทพฯ" required>
+            </div>
+
+
+
+            <div class="form-group">
+              <label for="chkInTime">เวลาที่รถเข้าอาคาร (Check-in Date/Time)</label>
+              <input type="datetime-local" id="chkInTime" class="input-field checkin-time-readonly" required readonly>
+              <span class="help-text">⏱️ ระบบบันทึกเวลาปัจจุบันอัตโนมัติ (ไม่สามารถแก้ไขได้)</span>
+            </div>
+
+            <button type="submit" class="btn btn-primary submit-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4L12 5h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2z"/>
+              </svg>
+              บันทึกข้อมูลรถเข้าอาคาร
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: RECORD CHECK-OUT -->
+    <section id="scrCheckOut" class="screen-panel slide-up">
+      <div class="form-container-centered">
+        <div class="workspace-panel shadow-lg" style="max-width: 650px; margin: 0 auto;">
+          <div class="panel-header">
+            <h2 class="panel-title">📤 บันทึกและคำนวณค่าบริการรถออก (Vehicle Check-Out)</h2>
+          </div>
+
+          <div class="checkout-search-wrapper">
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <div class="form-group" style="position: relative; flex: 1; margin-bottom: 0;">
+                <label for="chkOutSearchPlate">พิมพ์ค้นหาทะเบียนรถ (พิมพ์บางส่วนได้)*</label>
+                <input type="text" id="chkOutSearchPlate" class="input-field input-large" placeholder="พิมพ์ทะเบียนรถ... (เช่น 1กก)" autocomplete="off" oninput="handlePlateSearchInput()">
+                
+                <!-- Search Autocomplete Dropdown List -->
+                <div id="autocompleteList" class="autocomplete-dropdown-list">
+                  <!-- Dropdown items will be injected here -->
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline-danger" style="height: 52px; padding: 0 20px; font-weight: 700;" onclick="cancelCheckoutBill()">
+                🔄 รีเซ็ต (Reset)
+              </button>
+            </div>
+          </div>
+
+          <!-- Checkout Details Output -->
+          <div id="checkoutDetailsBox" class="checkout-bill-card" style="display: none;">
+            <div class="bill-header">
+              <h3 class="bill-title">ข้อมูลคำนวณค่าจอดรถยนต์</h3>
+              <span id="chkOutMemberBadge" class="role-badge">ทั่วไป</span>
+            </div>
+
+            <!-- Warning Warning (Monthly Pass Expired) -->
+            <div id="chkOutWarningBox" class="alert-message danger" style="display: none; font-weight:700; margin-bottom:12px;">
+              ⚠️ คำเตือน: <span id="chkOutWarningText">กรุณาชำระค่าจอดรถรายเดือน</span>
+            </div>
+
+            <div class="bill-body">
+              <div class="bill-row">
+                <span>ทะเบียนรถ:</span>
+                <strong id="chkOutPlateDisplay" class="value-highlight">1กก1111</strong>
+              </div>
+
+              <div class="bill-row">
+                <span>วันเวลาเข้า:</span>
+                <span id="chkOutTimeInDisplay">02/06/2026 09:10</span>
+              </div>
+              <div class="bill-row">
+                <span>วันเวลาออก (ปัจจุบัน):</span>
+                <span id="chkOutTimeOutDisplay">02/06/2026 18:10</span>
+              </div>
+              
+              <!-- Regular Calculations Block -->
+              <div id="chkOutRegularCalcBlock" style="display: block;">
+                <div class="bill-row border-top">
+                  <span>ระยะเวลาจอดรถสะสม:</span>
+                  <strong id="chkOutDurationDisplay">9:00 ชั่วโมง</strong>
+                </div>
+                <div class="bill-row">
+                  <span>ระยะเวลาจอดฟรี:</span>
+                  <span><strong id="chkOutFreeDisplay">1</strong> ชั่วโมง</span>
+                </div>
+                <div class="bill-row" id="chkOutExemptRow" style="display: none; color: var(--success); font-weight: 600;">
+                  <span>ยกเว้นค่าจอดรถ:</span>
+                  <span>-<strong id="chkOutExemptHoursDisplay">0</strong> ชั่วโมง</span>
+                </div>
+                <div class="bill-row">
+                  <span>ระยะเวลารวมคิดเงิน:</span>
+                  <span><strong id="chkOutPayableHoursDisplay">8:00</strong> ชั่วโมง</span>
+                </div>
+                <div class="bill-row">
+                  <span>อัตราค่าบริการ:</span>
+                  <span>ชั่วโมงละ 20 บาท</span>
+                </div>
+                
+                <!-- Coupons section -->
+                <div class="coupon-input-box" style="margin-top: 12px; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 6px;">
+                  <label for="chkOutCoupons" style="font-size:12px; display:block; margin-bottom:4px;">คูปองส่วนลดใบละ 20 บาท (จำนวนใบ):</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="chkOutCoupons" class="input-field" style="max-width:100px; padding: 6px;" min="0" oninput="recalculateCoupons()">
+                    <span style="font-size:12px; color:var(--text-muted);">ลดหย่อนสูงสุดไม่เกินค่าจอดจริง</span>
+                  </div>
+                </div>
+                
+                <div class="bill-total-row">
+                  <span>จำนวนเงินค่าจอด:</span>
+                  <span class="total-price" id="chkOutTotalAmount">฿160.00</span>
+                </div>
+              </div>
+
+              <!-- Monthly Calculations Block -->
+              <div id="chkOutMonthlyCalcBlock" style="display: none; background: rgba(16,185,129,0.05); padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(16,185,129,0.2);">
+                <div class="bill-row">
+                  <span>ผู้เป็นเจ้าของรถ:</span>
+                  <span id="chkOutOwnerDisplay">-</span>
+                </div>
+                <div class="bill-row">
+                  <span>สังกัด/บริษัท:</span>
+                  <span id="chkOutCompanyDisplay">-</span>
+                </div>
+                <div class="bill-row">
+                  <span>สิ้นสุดการจอดรายเดือน:</span>
+                  <strong id="chkOutExpDisplay">-</strong>
+                </div>
+                <div class="bill-row">
+                  <span>สถานะ:</span>
+                  <strong class="color-success">รถสมาชิกรวมบริการรายเดือน (ไม่เก็บค่าบริการหน้าด่าน)</strong>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="bill-actions" style="margin-top: 16px;">
+              <button class="btn btn-success" style="width: 100%; height:46px;" onclick="submitCheckOut()">
+                💾 บันทึกข้อมูลการนำรถออกอาคาร
+              </button>
+            </div>
+          </div>
+
+          <div id="checkoutPlaceholder" class="no-bill-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/><path d="m21 21-4.3-4.3" />
+            </svg>
+            <p>กรุณาพิมพ์ป้ายทะเบียนรถที่ต้องการเช็คเอาท์ในช่องค้นหาด้านบน เพื่อตรวจสอบประวัติรถเข้า</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: DASHBOARD & REPORT -->
+    <section id="scrDashboard" class="screen-panel slide-up">
+      <!-- Date filter, Export button, and KPIs -->
+      <div class="dashboard-controls-row">
+        <div class="date-selector-box">
+          <div class="date-input-group">
+            <label for="dashDateSelector">🔍 เลือกวันที่ดูข้อมูล:</label>
+            <input type="date" id="dashDateSelector" class="input-field date-input" onchange="handleDashDateChange()">
+          </div>
+          <div class="date-actions-group">
+            <button class="btn btn-outline-danger" id="btnShowAllLogs" onclick="filterDashboard('all')" style="height: 38px; padding: 0 16px; display: none;">
+              📋 แสดงข้อมูลทั้งหมด
+            </button>
+            <button class="btn btn-primary" onclick="exportDailyLogsToExcel()" style="height: 38px; padding: 0 16px;">
+              📥 ส่งออกรายงาน (Excel)
+            </button>
+          </div>
+        </div>
+        <div class="time-ticker-box">
+          <span id="tickerText">ข้อมูลระบบ: -- / -- / ---- --:--:--</span>
+        </div>
+      </div>
+
+      <div class="dashboard-stats">
+        <div class="stat-card occupied" id="cardOccupied" onclick="filterDashboard('parked')" style="cursor: pointer;">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 17V7h4.5a3 3 0 1 1 0 6H9" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-title">จำนวนรถจอดในอาคารตอนนี้</span>
+            <span class="stat-value" id="statOccupiedNow">0</span>
+            <span class="stat-label">คัน (ไม่ระบุเวลาออก)</span>
+          </div>
+        </div>
+
+        <div class="stat-card available" id="cardCheckedOut" onclick="filterDashboard('checked_out')" style="cursor: pointer;">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-title">รถที่ออกไปแล้ว</span>
+            <span class="stat-value" id="statCheckedOutToday">0</span>
+            <span class="stat-label">คัน (เช็คเอาท์ในวันที่เลือก)</span>
+          </div>
+        </div>
+
+        <div class="stat-card revenue" id="cardRevenue" onclick="filterDashboard('revenue')" style="cursor: pointer;">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-title">รายได้สะสม</span>
+            <span class="stat-value" id="statRevenueAmount">฿0.00</span>
+            <span class="stat-label">เฉพาะรายการเช็คเอาท์ตามวันที่เลือก</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Logs Table -->
+      <div class="workspace-panel">
+        <div class="panel-header">
+          <h3 class="panel-title flex-title">
+            <span class="active-badge"></span>
+            บันทึกประวัติรถเข้า-ออกของวันที่เลือก (Parking Logs for Selected Date)
+          </h3>
+          <span style="font-size:12px; color:var(--text-muted);">* สามารถกดลบแถวรายการด้านล่างได้หากบันทึกทะเบียนรถผิด</span>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ทะเบียนรถ</th>
+                <th>สถานะสมาชิก</th>
+                <th>วันเวลาเข้า</th>
+                <th>วันเวลาออก</th>
+                <th>ระยะเวลาจอด</th>
+                <th>ค่าบริการ</th>
+                <th>คูปอง (ใบ)</th>
+                <th>ยกเว้น (ชม.)</th>
+                <th>บริษัท</th>
+                <th>ผู้บันทึก (เข้า/ออก)</th>
+                <th style="text-align: center;">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="dashLogsTableBody">
+              <tr>
+                <td colspan="11" class="empty-state">ไม่มีประวัติของวันที่เลือก</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: MONTHLY REGISTERED VEHICLES (CRUD) -->
+    <section id="scrMonthly" class="screen-panel slide-up">
+      <div class="control-box-double">
+        <!-- Left column: Form + Import -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Form input for Monthly -->
+          <div class="workspace-panel shadow-sm">
+            <div class="panel-header">
+              <h3 id="monthlyFormTitle" class="panel-title">💳 เพิ่มสมาชิกรายเดือนใหม่ (Register Monthly Pass)</h3>
+            </div>
+            
+            <form id="monthlyForm" onsubmit="event.preventDefault(); saveMonthlyVehicle();">
+              <input type="hidden" id="monthlyId" value="">
+              
+              <div class="form-group">
+                <label for="monPlate">ทะเบียนรถ (License Plate)*</label>
+                <input type="text" id="monPlate" class="input-field" placeholder="เช่น 1กก1111" required>
+              </div>
+              
+              <div class="form-group">
+                <label for="monOwner">ชื่อเจ้าของรถ (Owner Name)*</label>
+                <input type="text" id="monOwner" class="input-field" placeholder="เช่น คุณสมศักดิ์ รักดี" required>
+              </div>
+
+              <div class="form-group">
+                <label for="monCompany">บริษัทผู้เช่า (Tenant Company)*</label>
+                <select id="monCompany" class="input-field" required>
+                  <!-- Options populated dynamically from tenantCompanies -->
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="monExpMonth">สิ้นสุดเดือนที่จอดได้ (Expiration)*</label>
+                  <input type="month" id="monExpMonth" class="input-field" required>
+                </div>
+                
+                <div class="form-group" style="justify-content: center; align-items: flex-start; padding-top: 15px;">
+                  <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
+                    <input type="checkbox" id="monIsExecutive" style="width:18px; height:18px;">
+                    รถผู้บริหาร (Executive)
+                  </label>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:10px; margin-top:12px;">
+                <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกสิทธิ์รายเดือน</button>
+                <button type="button" id="btnCancelMonEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetMonthlyForm()">ยกเลิก</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Import Excel Panel -->
+          <div class="workspace-panel shadow-sm">
+            <div class="panel-header">
+              <h3 class="panel-title">📂 นำเข้าข้อมูลสมาชิกรายเดือนจาก Excel</h3>
+            </div>
+            <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
+              📋 รูปแบบ Excel ที่รองรับ (columns ตามลำดับ):<br>
+              <strong>ทะเบียนรถ, เจ้าของ, กลุ่มบริษัท, สิ้นสุดสัญญา (YYYY-MM), สถานะ (1=ผู้บริหาร / 0=ทั่วไป)</strong>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <label for="monthlyExcelFile" class="btn btn-outline-danger" style="cursor:pointer; height:38px; display:flex; align-items:center; gap:6px; padding:0 16px;">
+                📁 เลือกไฟล์ Excel
+              </label>
+              <input type="file" id="monthlyExcelFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importMonthlyFromExcel(this)">
+              <span id="monthlyExcelFileName" style="font-size:12px; color:var(--text-muted);">ยังไม่ได้เลือกไฟล์</span>
+            </div>
+            <div id="monthlyImportResult" style="margin-top:10px; font-size:12.5px; display:none;"></div>
+          </div>
+        </div>
+
+        <!-- List table of Monthly members -->
+        <div class="workspace-panel shadow-sm" style="flex: 1.5;">
+          <div class="panel-header">
+            <h3 class="panel-title">📋 รายชื่อสมาชิกรถรายเดือน (Monthly Registered Members)</h3>
+          </div>
+          
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ทะเบียนรถ</th>
+                  <th>เจ้าของ</th>
+                  <th>กลุ่มบริษัท</th>
+                  <th>สิ้นสุดสัญญา</th>
+                  <th>สถานะ</th>
+                  <th style="text-align: center;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="monthlyTableBody">
+                <tr>
+                  <td colspan="6" class="empty-state">กำลังดึงข้อมูลสมาชิกรายเดือน...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 5: USER MANAGEMENT (CRUD) -->
+    <section id="scrUsers" class="screen-panel slide-up">
+      <div class="control-box-double">
+        <!-- Form input for Users -->
+        <div class="workspace-panel shadow-sm">
+          <div class="panel-header">
+            <h3 id="userFormTitle" class="panel-title">👥 เพิ่มผู้ใช้งานระบบใหม่ (Add User Accounts)</h3>
+          </div>
+          
+          <form id="userForm" onsubmit="event.preventDefault(); saveUserAccount();">
+            <input type="hidden" id="userId" value="">
+            
+            <div class="form-group">
+              <label for="usrUsername">ชื่อผู้ใช้งาน (Username)*</label>
+              <input type="text" id="usrUsername" class="input-field" placeholder="เช่น somchai" required>
+            </div>
+
+            <div class="form-group">
+              <label for="usrRole">บทบาทหน้างาน (Role)*</label>
+              <select id="usrRole" class="input-field" required>
+                <option value="user">ผู้ใช้งานทั่วไป (Staff)</option>
+                <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                <option value="Validator">ผู้บันทึกสิทธิ์จอดรถ (Parking Validator)</option>
+              </select>
+            </div>
+
+            <div id="usrCompanyGroup" class="form-group" style="display: none;">
+              <label for="usrCompany">บริษัทผู้เช่า (Tenant Company)*</label>
+              <select id="usrCompany" class="input-field">
+                <!-- Options populated dynamically from tenantCompanies -->
+              </select>
+            </div>
+
+            <div id="usrMaxExemptHoursGroup" class="form-group" style="display: none;">
+              <label for="usrMaxExemptHours">ยกเว้นค่าจอดรถสูงสุด (ชั่วโมง, ไม่เกิน 72)*</label>
+              <input type="number" id="usrMaxExemptHours" class="input-field" min="1" max="72" placeholder="เช่น 24">
+            </div>
+
+            <div class="form-group">
+              <label for="usrPassword">รหัสผ่าน (Password)*</label>
+              <input type="password" id="usrPassword" class="input-field" placeholder="ระบุรหัสผ่าน..." required autocomplete="new-password">
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกผู้ใช้</button>
+              <button type="button" id="btnCancelUsrEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetUserForm()">ยกเลิก</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- List table of users -->
+        <div class="workspace-panel shadow-sm" style="flex: 1.5;">
+          <div class="panel-header">
+            <h3 class="panel-title">👥 บัญชีผู้ใช้งานระบบทั้งหมด (User Management Accounts)</h3>
+          </div>
+          
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ชื่อผู้ใช้งาน</th>
+                  <th>บทบาท</th>
+                  <th>รหัสผ่าน</th>
+                  <th style="text-align: center;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr>
+                  <td colspan="4" class="empty-state">กำลังดึงบัญชีรายชื่อ...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 6: TENANT COMPANIES (CRUD) -->
+    <section id="scrCompanies" class="screen-panel slide-up">
+      <div class="control-box-double">
+        <!-- Form input for Companies -->
+        <div class="workspace-panel shadow-sm">
+          <div class="panel-header">
+            <h3 id="companyFormTitle" class="panel-title">🏢 เพิ่มบริษัทผู้เช่าใหม่ (Add Tenant Company)</h3>
+          </div>
+          
+          <form id="companyForm" onsubmit="event.preventDefault(); saveCompany();">
+            <input type="hidden" id="companyId" value="">
+            
+            <div class="form-group">
+              <label for="compCode">รหัสบริษัท (Company Code)*</label>
+              <input type="text" id="compCode" class="input-field" placeholder="เช่น ADV" required>
+            </div>
+
+            <div class="form-group">
+              <label for="compName">ชื่อบริษัท (Company Name)*</label>
+              <input type="text" id="compName" class="input-field" placeholder="เช่น บริษัท แอดวานซ์ จำกัด" required>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกบริษัท</button>
+              <button type="button" id="btnCancelCompEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetCompanyForm()">ยกเลิก</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- List table of companies -->
+        <div class="workspace-panel shadow-sm" style="flex: 1.5;">
+          <div class="panel-header">
+            <h3 class="panel-title">🏢 รายชื่อบริษัทผู้เช่าทั้งหมด (Tenant Companies)</h3>
+          </div>
+          
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>รหัสบริษัท</th>
+                  <th>ชื่อบริษัท</th>
+                  <th style="text-align: center;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="companiesTableBody">
+                <tr>
+                  <td colspan="3" class="empty-state">กำลังดึงข้อมูลบริษัทผู้เช่า...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 7: RECORD PARKING EXEMPTION -->
+    <section id="scrExempt" class="screen-panel slide-up">
+      <div class="form-container-centered">
+        <div class="workspace-panel shadow-lg" style="max-width: 600px; margin: 0 auto;">
+          <div class="panel-header">
+            <h2 class="panel-title">🎟️ บันทึกส่วนลด/ยกเว้นค่าบริการจอดรถ (Parking Fee Exemption)</h2>
+          </div>
+
+          <div class="checkout-search-wrapper">
+            <div class="form-group" style="position: relative;">
+              <label for="exemptSearchPlate">พิมพ์ค้นหาทะเบียนรถผู้มาติดต่อ (พิมพ์บางส่วนได้)*</label>
+              <input type="text" id="exemptSearchPlate" class="input-field input-large" placeholder="พิมพ์ทะเบียนรถ... (เช่น 1กก)" autocomplete="off" oninput="handleExemptPlateSearchInput()">
+              
+              <!-- Search Autocomplete Dropdown List -->
+              <div id="exemptAutocompleteList" class="autocomplete-dropdown-list">
+                <!-- Dropdown items will be injected here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Exemption details -->
+          <div id="exemptDetailsBox" class="checkout-bill-card" style="display: none;">
+            <div class="bill-header">
+              <h3 class="bill-title">บันทึกสิทธิ์จอดรถ</h3>
+              <span class="role-badge success">ผู้มาติดต่อ</span>
+            </div>
+
+            <div class="bill-body">
+              <div class="bill-row">
+                <span>ทะเบียนรถ:</span>
+                <strong id="exemptPlateDisplay" class="value-highlight">1กก1111</strong>
+              </div>
+
+              <div class="bill-row">
+                <span>วันเวลาเข้า:</span>
+                <span id="exemptTimeInDisplay">-</span>
+              </div>
+              <div class="bill-row">
+                <span>ระยะเวลาจอดรถปัจจุบัน:</span>
+                <strong id="exemptDurationDisplay">-</strong>
+              </div>
+              
+              <!-- Exemption form input -->
+              <div style="margin-top: 12px; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="exemptHoursInput" style="font-weight: 700;">จำนวนชั่วโมงที่ยกเว้นค่าจอดรถ (1 - 99)*</label>
+                  <div style="display:flex; align-items:center; gap:10px; margin-top: 6px;">
+                    <input type="number" id="exemptHoursInput" class="input-field" style="max-width:120px; padding: 10px; font-size:16px; font-weight:700;" min="1" max="99" step="1" required placeholder="ระบุชั่วโมง...">
+                    <span style="font-size:14px; color:var(--text-secondary); font-weight: 500;">ชั่วโมง (สามารถแก้ไขภายหลังได้)</span>
+                  </div>
+                  <span class="help-text" style="display: block; margin-top: 6px;">⏱️ ระบุได้เฉพาะเลขจำนวนเต็ม 1-99 เท่านั้น (ไม่สามารถระบุ 0 ได้)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="bill-actions" style="margin-top: 16px; display: flex; gap: 10px;">
+              <button class="btn btn-success" style="flex: 1; height:46px;" onclick="submitExemption()">
+                💾 บันทึกการยกเว้นค่าจอดรถ
+              </button>
+              <button class="btn btn-outline-danger" style="height:46px;" onclick="resetExemptScreen()">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+
+          <div id="exemptPlaceholder" class="no-bill-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/><path d="m21 21-4.3-4.3" />
+            </svg>
+            <p>กรุณาพิมพ์ป้ายทะเบียนรถที่ต้องการบันทึกยกเว้นค่าจอดในช่องค้นหาด้านบน เพื่อตรวจสอบประวัติรถเข้า</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- EDIT LOG MODAL -->
+  <div id="editLogModal" class="login-screen-overlay" style="display: none; z-index: 2000;">
+    <div class="login-card" style="max-width: 500px;">
+      <div class="panel-header" style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+        <h3 class="panel-title">✏️ แก้ไขข้อมูลรายการจอดรถ</h3>
+      </div>
+      
+      <form id="editLogForm" onsubmit="event.preventDefault(); saveEditedParkingLog();">
+        <input type="hidden" id="editLogId">
+        
+        <div class="form-group">
+          <label for="editLogPlate">ทะเบียนรถ (License Plate)*</label>
+          <input type="text" id="editLogPlate" class="input-field" placeholder="ตัวอย่าง: 1กก1111" required>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editLogTimeIn">วันเวลาเข้า*</label>
+            <input type="datetime-local" id="editLogTimeIn" class="input-field" required>
+          </div>
+          <div class="form-group">
+            <label for="editLogTimeOut">วันเวลาออก (ว่างไว้หากยังไม่เช็คเอาท์)</label>
+            <input type="datetime-local" id="editLogTimeOut" class="input-field">
+          </div>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกการแก้ไข</button>
+          <button type="button" class="btn btn-outline-danger" style="flex: 1; height: 42px;" onclick="closeEditParkingLogModal()">ยกเลิก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SheetJS for Excel Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Core Script with Version Cache Buster -->
+  <script src="app.js?v=1.1.0"></script>
+</body>
+</html>

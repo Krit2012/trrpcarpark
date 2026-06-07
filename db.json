@@ -1,0 +1,240 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "role": "admin",
+      "pin": "1234",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 2,
+      "username": "user1",
+      "role": "user",
+      "pin": "1234",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 3,
+      "username": "testuser",
+      "role": "user",
+      "pin": "5678",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 4,
+      "username": "kim",
+      "role": "user",
+      "pin": "1234",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 5,
+      "username": "verifyuser",
+      "role": "user",
+      "pin": "abcd",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 6,
+      "username": "rod",
+      "role": "user",
+      "pin": "1234",
+      "company": null,
+      "max_exemptedHours": null
+    }
+  ],
+  "monthlyVehicles": [
+    {
+      "id": 1,
+      "plate": "6ขฐ4456",
+      "owner": "กฤต สุวรรณภูษาภรณ์",
+      "company": "TRRT",
+      "expMonth": "2026-06",
+      "isExecutive": false
+    },
+    {
+      "id": 2,
+      "plate": "8ศศ7483",
+      "owner": "พิทักษ์ นครบาล",
+      "company": "UBIS",
+      "expMonth": "2026-06",
+      "isExecutive": false
+    },
+    {
+      "id": 3,
+      "plate": "ษษ789",
+      "owner": "ชัย ชิดชอบ",
+      "company": "SGS",
+      "expMonth": "2026-06",
+      "isExecutive": true
+    }
+  ],
+  "parkingLogs": [
+    {
+      "id": 10004,
+      "plate": "1กก1234",
+      "timeIn": "2026-06-03T08:34:00.000Z",
+      "timeOut": "2026-06-03T13:44:04.042Z",
+      "createdBy": "kim",
+      "createdAt": "2026-06-03T13:35:41.116Z",
+      "updatedBy": "admin",
+      "updatedAt": "2026-06-03T13:44:04.046Z",
+      "status": "checked_out",
+      "amount": 100,
+      "coupons": 0
+    },
+    {
+      "id": 10005,
+      "plate": "1กก1111",
+      "timeIn": "2026-06-03T02:35:00.000Z",
+      "timeOut": "2026-06-03T13:45:40.957Z",
+      "createdBy": "admin",
+      "createdAt": "2026-06-03T13:44:41.314Z",
+      "updatedBy": "admin",
+      "updatedAt": "2026-06-03T13:45:40.961Z",
+      "status": "checked_out",
+      "amount": 0,
+      "coupons": 0
+    },
+    {
+      "id": 10006,
+      "plate": "6ขฐ4456",
+      "timeIn": "2026-06-03T13:44:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-03T13:49:33.725Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0
+    },
+    {
+      "id": 10007,
+      "plate": "2ขข8765",
+      "timeIn": "2026-06-03T14:21:00.000Z",
+      "timeOut": "2026-06-04T10:08:20.047Z",
+      "createdBy": "admin",
+      "createdAt": "2026-06-03T14:30:11.849Z",
+      "updatedBy": "admin",
+      "updatedAt": "2026-06-04T10:08:20.049Z",
+      "status": "checked_out",
+      "amount": 340,
+      "coupons": 0,
+      "exemptedHours": 2,
+      "exemptedCompany": "Test Company Updated",
+      "exemptedBy": "validator1",
+      "exemptedAt": "2026-06-04T10:08:12.303Z"
+    },
+    {
+      "id": 10008,
+      "plate": "8ศศ7483",
+      "timeIn": "2026-06-03T14:43:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-03T14:43:37.775Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0
+    },
+    {
+      "id": 10009,
+      "plate": "3กก3333",
+      "timeIn": "2026-06-04T11:56:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-04T11:56:42.133Z",
+      "updatedBy": "validator2",
+      "updatedAt": "2026-06-04T11:58:54.013Z",
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0,
+      "exemptedHours": 12,
+      "exemptedCompany": "กลุ่มบริษัท แอดวานซ์",
+      "exemptedBy": "validator2",
+      "exemptedAt": "2026-06-04T11:58:54.011Z"
+    },
+    {
+      "id": 10010,
+      "plate": "3กก3333",
+      "timeIn": "2026-06-04T11:57:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-04T11:57:26.909Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0,
+      "exemptedHours": null,
+      "exemptedCompany": null,
+      "exemptedBy": null,
+      "exemptedAt": null
+    },
+    {
+      "id": 10011,
+      "plate": "3กก3333",
+      "timeIn": "2026-06-04T11:57:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-04T11:57:59.342Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0,
+      "exemptedHours": null,
+      "exemptedCompany": null,
+      "exemptedBy": null,
+      "exemptedAt": null
+    },
+    {
+      "id": 10012,
+      "plate": "3กก3333",
+      "timeIn": "2026-06-04T11:58:00.000Z",
+      "timeOut": null,
+      "createdBy": "admin",
+      "createdAt": "2026-06-04T11:58:42.663Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "coupons": 0,
+      "exemptedHours": null,
+      "exemptedCompany": null,
+      "exemptedBy": null,
+      "exemptedAt": null
+    }
+  ],
+  "settings": {
+    "syncVersion": 1
+  },
+  "logs": [
+    {
+      "id": 1,
+      "username": "system",
+      "action": "Initialize TRRP Car Park database with sample data",
+      "timestamp": "2026-06-02T11:29:39.560Z"
+    }
+  ],
+  "tenantCompanies": [
+    {
+      "id": 1,
+      "code": "ADV",
+      "name": "กลุ่มบริษัท แอดวานซ์"
+    },
+    {
+      "id": 2,
+      "code": "BLD",
+      "name": "กลุ่มบริษัท บิลเดอร์"
+    }
+  ]
+}

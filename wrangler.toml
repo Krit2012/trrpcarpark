@@ -1,0 +1,9 @@
+name = "trrpcarpark"
+pages_build_output_dir = "./public"
+
+compatibility_date = "2024-03-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trrp-carpark-db"
+database_id = "b11a08ab-1f70-4458-b8d1-c52c5b6c5f9b"

@@ -1,0 +1,16 @@
+{
+  "name": "trrp-carpark",
+  "version": "1.4.0",
+  "description": "TRRP Car Park Management Web Application",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.0",
+    "xlsx": "^0.18.5"
+  }
+}
