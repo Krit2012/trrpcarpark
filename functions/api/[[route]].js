@@ -80,6 +80,17 @@ export async function onRequest(context) {
     }
 
     try {
+      // 2.2 Column: adUser in users
+      await env.DB.prepare("SELECT adUser FROM users LIMIT 1").all();
+    } catch (e) {
+      try {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN adUser TEXT DEFAULT 'N'").run();
+      } catch (err) {
+        console.error("Migration error users adUser:", err);
+      }
+    }
+
+    try {
       // 3. Columns: exemptedHours, exemptedCompany, exemptedBy, exemptedAt in parking_logs
       await env.DB.prepare("SELECT exemptedHours FROM parking_logs LIMIT 1").all();
     } catch (e) {
@@ -155,6 +166,33 @@ export async function onRequest(context) {
       });
     }
 
+    // Expose AD verification proxy endpoint
+    if (path === "/api/carpark/auth/verify-ad" && method === "POST") {
+      const { username, password } = await request.json();
+      if (!username || !password) {
+        return resJson({ status: "Error", error: "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน AD" }, 400);
+      }
+
+      try {
+        const response = await fetch('https://trr-api.trrgroup.com/api_sys_auth/sysauth/Sys_auth_emp_profile_Get', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            password,
+            auth_admin_profileModel: {
+              domain_id: "|TRRGROUP.COM|,|TRR.TRRGROUP.COM|,|BSI.TRRGROUP.COM|,|TMI.TRRGROUP.COM|,|TRRSK.TRRGROUP.COM|,|SK.TRRGROUP.COM|,|PS.TRRGROUP.COM|,|CST.TRRGROUP.COM|,"
+            },
+            ParamGetMode: "CHECKAD"
+          })
+        });
+        const data = await response.json();
+        return resJson(data);
+      } catch (err) {
+        return resJson({ status: "Error", error: "ไม่สามารถเชื่อมต่อระบบตรวจสอบสิทธิ์ AD ได้: " + err.message }, 500);
+      }
+    }
+
     // Added for compatibility with cached legacy clients
     if (path === "/api/carpark/login" && method === "POST") {
       const { username, pin } = await request.json();
@@ -166,27 +204,66 @@ export async function onRequest(context) {
         "SELECT * FROM users WHERE LOWER(username) = ?"
       ).bind(username.trim().toLowerCase()).first();
 
-      if (matchedUser && String(matchedUser.pin || '1234').trim() === String(pin).trim()) {
-        return resJson({
-          success: true,
-          user: {
-            username: matchedUser.username,
-            role: matchedUser.role
-          }
-        });
-      } else {
+      if (!matchedUser) {
         return resJson({ error: "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง" }, 401);
+      }
+
+      if (matchedUser.adUser === 'Y') {
+        try {
+          const response = await fetch('https://trr-api.trrgroup.com/api_sys_auth/sysauth/Sys_auth_emp_profile_Get', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username,
+              password: pin,
+              auth_admin_profileModel: {
+                domain_id: "|TRRGROUP.COM|,|TRR.TRRGROUP.COM|,|BSI.TRRGROUP.COM|,|TMI.TRRGROUP.COM|,|TRRSK.TRRGROUP.COM|,|SK.TRRGROUP.COM|,|PS.TRRGROUP.COM|,|CST.TRRGROUP.COM|,"
+              },
+              ParamGetMode: "CHECKAD"
+            })
+          });
+          const data = await response.json();
+          if (data && data.status === 'Success') {
+            const empUrl = data.employee_url || (data.data ? data.data.employee_url : null);
+            return resJson({
+              success: true,
+              user: {
+                username: matchedUser.username,
+                role: matchedUser.role,
+                employeeUrl: empUrl
+              }
+            });
+          } else {
+            const errMsg = (data && data.error) ? data.error : "การตรวจสอบสิทธิ์ AD ล้มเหลว";
+            return resJson({ error: errMsg }, 401);
+          }
+        } catch (err) {
+          return resJson({ error: "ไม่สามารถเชื่อมต่อระบบตรวจสอบสิทธิ์ AD ได้: " + err.message }, 500);
+        }
+      } else {
+        const pinVal = String(matchedUser.pin || matchedUser.pass || '1234').trim();
+        if (String(pin).trim() === pinVal) {
+          return resJson({
+            success: true,
+            user: {
+              username: matchedUser.username,
+              role: matchedUser.role
+            }
+          });
+        } else {
+          return resJson({ error: "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง" }, 401);
+        }
       }
     }
 
     // POST /api/carpark/users/save
     if (path === "/api/carpark/users/save" && method === "POST") {
-      const { id, username, role, pin, company, max_exemptedHours, adminUsername } = await request.json();
+      const { id, username, role, pin, company, max_exemptedHours, adUser, adminUsername } = await request.json();
       if (!username || !role || !adminUsername) {
         return resJson({ error: "Missing required fields" }, 400);
       }
 
-      if (!pin || String(pin).trim() === "") {
+      if (adUser !== 'Y' && (!pin || String(pin).trim() === "")) {
         return resJson({ error: "กรุณาระบุรหัสผ่าน" }, 400);
       }
 
@@ -203,9 +280,10 @@ export async function onRequest(context) {
 
       let actionText = "";
       let savedUser;
-      const pinVal = String(pin).trim();
+      const pinVal = adUser === 'Y' ? null : String(pin).trim();
       const companyVal = company || null;
       const maxExemptVal = role === 'Validator' ? (max_exemptedHours !== undefined && max_exemptedHours !== null ? Number(max_exemptedHours) : null) : null;
+      const adUserVal = adUser || 'N';
 
       if (id) {
         // Edit User
@@ -215,22 +293,22 @@ export async function onRequest(context) {
         }
 
         await env.DB.prepare(
-          "UPDATE users SET username = ?, role = ?, pin = ?, company = ?, max_exemptedHours = ? WHERE id = ?"
-        ).bind(username.trim(), role, pinVal, companyVal, maxExemptVal, Number(id)).run();
+          "UPDATE users SET username = ?, role = ?, pin = ?, company = ?, max_exemptedHours = ?, adUser = ? WHERE id = ?"
+        ).bind(username.trim(), role, pinVal, companyVal, maxExemptVal, adUserVal, Number(id)).run();
 
-        savedUser = { id: Number(id), username: username.trim(), role, pin: pinVal, company: companyVal, max_exemptedHours: maxExemptVal };
-        actionText = `แก้ไขข้อมูลผู้ใช้งาน: ${username} (Role: ${role})`;
+        savedUser = { id: Number(id), username: username.trim(), role, pin: pinVal, company: companyVal, max_exemptedHours: maxExemptVal, adUser: adUserVal };
+        actionText = `แก้ไขข้อมูลผู้ใช้งาน: ${username} (Role: ${role}, AD: ${adUserVal})`;
       } else {
         // Add User
         const insertRes = await env.DB.prepare(
-          "INSERT INTO users (username, role, pin, company, max_exemptedHours) VALUES (?, ?, ?, ?, ?) RETURNING *"
-        ).bind(username.trim(), role, pinVal, companyVal, maxExemptVal).first();
+          "INSERT INTO users (username, role, pin, company, max_exemptedHours, adUser) VALUES (?, ?, ?, ?, ?, ?) RETURNING *"
+        ).bind(username.trim(), role, pinVal, companyVal, maxExemptVal, adUserVal).first();
 
         savedUser = {
           ...insertRes,
           id: Number(insertRes.id)
         };
-        actionText = `เพิ่มผู้ใช้งานใหม่: ${username} (Role: ${role})`;
+        actionText = `เพิ่มผู้ใช้งานใหม่: ${username} (Role: ${role}, AD: ${adUserVal})`;
       }
 
       const logTime = new Date().toISOString();
@@ -434,6 +512,17 @@ export async function onRequest(context) {
       const { id, plate, timeIn, timeOut, createdBy, updatedBy, status, amount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt } = await request.json();
       if (!plate || !timeIn || !status || createdBy === undefined) {
         return resJson({ error: "Missing required fields" }, 400);
+      }
+
+      if (status === 'parked') {
+        const lowercasePlate = plate.trim().toLowerCase();
+        const duplicate = await env.DB.prepare(
+          "SELECT * FROM parking_logs WHERE status = 'parked' AND LOWER(plate) = ? AND id != ?"
+        ).bind(lowercasePlate, id ? Number(id) : -1).first();
+
+        if (duplicate) {
+          return resJson({ error: `ทะเบียนรถ "${plate.trim()}" มีอยู่ในระบบและยังไม่ได้บันทึกออก` }, 400);
+        }
       }
 
       let actionText = "";

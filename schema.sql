@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL,
   pin TEXT DEFAULT NULL,
   company TEXT DEFAULT NULL,
-  max_exemptedHours INTEGER DEFAULT NULL
+  max_exemptedHours INTEGER DEFAULT NULL,
+  adUser TEXT DEFAULT 'N'
 );
 
 -- Seed Default Carpark Users

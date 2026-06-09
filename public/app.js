@@ -55,6 +55,23 @@ window.addEventListener('DOMContentLoaded', () => {
     usrRoleEl.addEventListener('change', handleUserRoleChange);
   }
 
+  // Setup AD User checkbox listener
+  const usrIsADEl = document.getElementById('usrIsAD');
+  if (usrIsADEl) {
+    usrIsADEl.addEventListener('change', function() {
+      const isAD = this.checked;
+      const pwdGroup = document.getElementById('usrPasswordGroup');
+      const pwdInput = document.getElementById('usrPassword');
+      if (isAD) {
+        pwdGroup.style.display = 'none';
+        pwdInput.removeAttribute('required');
+      } else {
+        pwdGroup.style.display = 'block';
+        pwdInput.setAttribute('required', 'required');
+      }
+    });
+  }
+
   // Check session
   checkSession();
 });
@@ -213,7 +230,8 @@ async function syncAllDataWithBackend() {
           role: u.role,
           pass: u.pin || u.pass || '1234',
           company: u.company || null,
-          max_exemptedHours: u.max_exemptedHours !== undefined && u.max_exemptedHours !== null ? Number(u.max_exemptedHours) : null
+          max_exemptedHours: u.max_exemptedHours !== undefined && u.max_exemptedHours !== null ? Number(u.max_exemptedHours) : null,
+          adUser: u.adUser || 'N'
         }));
         localStorage.setItem('trrp_db_users', JSON.stringify(users));
         if (activeScreen === 'users') {
@@ -284,10 +302,28 @@ async function syncAllDataWithBackend() {
 // Session Check
 function checkSession() {
   const storedSession = localStorage.getItem('trrp_session');
+  const avatarImg = document.getElementById('sessionUserAvatar');
   if (storedSession) {
     session = JSON.parse(storedSession);
     document.getElementById('sessionUserDisplay').textContent = session.username;
-    
+
+    // Show avatar if available
+    let empUrl = session.employeeUrl;
+    if (!empUrl && session.username) {
+      const matchedU = users.find(usr => usr.username.toLowerCase() === session.username.toLowerCase());
+      if (matchedU && matchedU.adUser === 'Y') {
+        empUrl = `https://trr-web.trrgroup.com/empimage/TRRGROUP.COM/${session.username.toUpperCase()}.PNG`;
+      }
+    }
+
+    if (empUrl && avatarImg) {
+      avatarImg.src = empUrl;
+      avatarImg.style.display = 'block';
+    } else if (avatarImg) {
+      avatarImg.style.display = 'none';
+      avatarImg.src = '';
+    }
+
     const roleBadge = document.getElementById('sessionRoleBadge');
     if (session.role === 'admin') {
       roleBadge.textContent = 'แอดมิน';
@@ -348,6 +384,10 @@ function checkSession() {
     document.getElementById('appScreen').style.display = 'flex';
   } else {
     session = null;
+    if (avatarImg) {
+      avatarImg.style.display = 'none';
+      avatarImg.src = '';
+    }
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('appScreen').style.display = 'none';
   }
@@ -356,39 +396,106 @@ function checkSession() {
 // User Actions: Login
 async function handleLogin() {
   const userVal = document.getElementById('loginUser').value.trim();
-  const passVal = document.getElementById('loginPass').value.trim(); // Trim password to prevent trailing space failures
+  const passVal = document.getElementById('loginPass').value.trim();
   const errMsg = document.getElementById('loginErrorMsg');
   
   errMsg.style.display = 'none';
   
-  // Always fetch latest users from the database/backend first
-  await syncUsersWithBackend();
-  
-  const matchedUser = users.find(u => 
-    String(u.username).trim().toLowerCase() === userVal.toLowerCase() && 
-    String(u.pass).trim() === String(passVal)
-  );
-  if (matchedUser) {
-    const sessionObj = {
-      username: matchedUser.username,
-      role: matchedUser.role
-    };
-    localStorage.setItem('trrp_session', JSON.stringify(sessionObj));
+  if (!userVal || !passVal) {
+    errMsg.textContent = "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน!";
+    errMsg.style.display = 'block';
+    return;
+  }
+
+  // Always fetch latest users from the database/backend first to be in sync
+  try {
+    await syncUsersWithBackend();
+  } catch (e) {
+    console.warn("Failed to sync users with backend before login:", e);
+  }
+
+  let loginSuccess = false;
+  try {
+    const response = await fetch(`${API_BASE}/api/carpark/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: userVal, pin: passVal })
+    });
     
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        const sessionObj = {
+          username: resData.user.username,
+          role: resData.user.role,
+          employeeUrl: resData.user.employeeUrl || null
+        };
+        localStorage.setItem('trrp_session', JSON.stringify(sessionObj));
+        loginSuccess = true;
+      }
+    } else {
+      const resData = await response.json().catch(() => ({}));
+      if (resData && resData.error) {
+        errMsg.textContent = resData.error;
+        errMsg.style.display = 'block';
+        return; // Deny access and stop
+      }
+    }
+  } catch (error) {
+    console.warn("Could not authenticate with central backend, falling back to local users check:", error);
+  }
+
+  if (loginSuccess) {
     // Clear inputs
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
-    
     checkSession();
-  } else {
-    errMsg.style.display = 'block';
+    return;
   }
+
+  // Fallback to local storage (e.g. offline mode) for non-AD users
+  const matchedUser = users.find(u => 
+    String(u.username).trim().toLowerCase() === userVal.toLowerCase()
+  );
+
+  if (matchedUser) {
+    if (matchedUser.adUser === 'Y') {
+      // AD users cannot log in offline/without backend
+      errMsg.textContent = "ไม่สามารถเชื่อมต่อระบบตรวจสอบสิทธิ์ AD ได้ในขณะนี้";
+      errMsg.style.display = 'block';
+      return;
+    }
+
+    const matchedPassword = matchedUser.pass || matchedUser.pin || '1234';
+    if (String(matchedPassword).trim() === String(passVal)) {
+      const sessionObj = {
+        username: matchedUser.username,
+        role: matchedUser.role,
+        employeeUrl: null
+      };
+      localStorage.setItem('trrp_session', JSON.stringify(sessionObj));
+      
+      // Clear inputs
+      document.getElementById('loginUser').value = '';
+      document.getElementById('loginPass').value = '';
+      checkSession();
+      return;
+    }
+  }
+
+  errMsg.textContent = "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง";
+  errMsg.style.display = 'block';
 }
 
 // User Actions: Logout
 function handleLogout() {
   if (confirm("คุณต้องการออกจากระบบหรือไม่?")) {
     localStorage.removeItem('trrp_session');
+    const avatarImg = document.getElementById('sessionUserAvatar');
+    if (avatarImg) {
+      avatarImg.style.display = 'none';
+      avatarImg.src = '';
+    }
     checkSession();
   }
 }
@@ -685,6 +792,20 @@ async function saveEditedParkingLog() {
     return;
   }
 
+  // Validate duplicate plate for parked vehicles
+  if (!timeOutVal) {
+    const lowercasePlate = plate.toLowerCase();
+    const isDuplicate = logs.some(l =>
+      l.status === 'parked' &&
+      l.plate.trim().toLowerCase() === lowercasePlate &&
+      l.id !== logId
+    );
+    if (isDuplicate) {
+      alert(`ทะเบียนรถ "${plate}" มีอยู่ในระบบและยังไม่ได้บันทึกออก!`);
+      return;
+    }
+  }
+
   const idx = logs.findIndex(l => l.id === logId);
   if (idx === -1) return;
 
@@ -739,6 +860,12 @@ async function saveEditedParkingLog() {
         savedOnBackend = true;
         await syncAllDataWithBackend();
       } else if (resData && resData.error) {
+        alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
+        return;
+      }
+    } else {
+      const resData = await response.json().catch(() => ({}));
+      if (resData && resData.error) {
         alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
         return;
       }
@@ -890,6 +1017,17 @@ async function submitCheckIn() {
     return;
   }
 
+  // Validate duplicate plate for parked vehicles
+  const lowercasePlate = plate.toLowerCase();
+  const isDuplicate = logs.some(l =>
+    l.status === 'parked' &&
+    l.plate.trim().toLowerCase() === lowercasePlate
+  );
+  if (isDuplicate) {
+    alert(`ทะเบียนรถ "${plate}" มีอยู่ในระบบและยังไม่ได้บันทึกออก!`);
+    return;
+  }
+
   const timeIn = new Date(customTime).toISOString();
   const createdBy = session.username;
 
@@ -915,6 +1053,12 @@ async function submitCheckIn() {
         savedOnBackend = true;
         await syncAllDataWithBackend();
       } else if (resData && resData.error) {
+        alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
+        return;
+      }
+    } else {
+      const resData = await response.json().catch(() => ({}));
+      if (resData && resData.error) {
         alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
         return;
       }
@@ -1411,7 +1555,10 @@ function renderUsersTable() {
     const tr = document.createElement('tr');
     
     // Mask password
-    const passDisplay = `<span class="pin-masked" title="ชี้เพื่อดูรหัสผ่าน" style="cursor:help;">****</span>`;
+    const isAD = u.adUser === 'Y';
+    const passDisplay = isAD
+      ? `<span style="color: var(--success); font-weight: 600;">(AD User)</span>`
+      : `<span class="pin-masked" title="ชี้เพื่อดูรหัสผ่าน" style="cursor:help;">****</span>`;
 
     const isSelf = u.username.toLowerCase() === session.username.toLowerCase();
     const isAdmin = u.role === 'admin';
@@ -1431,13 +1578,14 @@ function renderUsersTable() {
       ? `<button class="btn-action-checkout" onclick="deleteUserAccount(${u.id})">ลบ</button>`
       : `<button class="btn-action-checkout" disabled style="opacity:0.3; cursor:not-allowed;">ลบ</button>`;
 
-    const pinVal = u.pass || u.pin || '****';
+    const pinVal = isAD ? '(AD User)' : (u.pass || u.pin || '****');
 
     tr.innerHTML = `
       <td><strong>${u.username}</strong> ${isSelf ? '(ตัวเอง)' : ''}</td>
       <td><span class="role-badge ${u.role}">${roleText}</span></td>
-      <td onmouseenter="this.querySelector('.pin-masked').textContent='${pinVal}'"
-          onmouseleave="this.querySelector('.pin-masked').textContent='****'">
+      <td>${isAD ? '<span style="color: var(--success); font-weight: 600;">Y</span>' : '<span style="color: var(--text-muted);">N</span>'}</td>
+      <td onmouseenter="this.querySelector('.pin-masked') ? this.querySelector('.pin-masked').textContent='${pinVal}' : null"
+          onmouseleave="this.querySelector('.pin-masked') ? this.querySelector('.pin-masked').textContent='****' : null">
         ${passDisplay}
       </td>
       <td style="text-align: center;">
@@ -1454,11 +1602,12 @@ async function saveUserAccount() {
   const id = document.getElementById('userId').value;
   const username = document.getElementById('usrUsername').value.trim();
   const role = document.getElementById('usrRole').value;
-  const pass = document.getElementById('usrPassword').value.trim(); // Trim password to prevent whitespace-related login issues
+  const isAD = document.getElementById('usrIsAD').checked;
+  const pass = isAD ? '' : document.getElementById('usrPassword').value.trim();
   const company = role === 'Validator' ? document.getElementById('usrCompany').value : null;
   const max_exemptedHours = role === 'Validator' ? parseInt(document.getElementById('usrMaxExemptHours').value) : null;
 
-  if (!username || !role || !pass) {
+  if (!username || !role || (!isAD && !pass)) {
     alert("กรุณากรอกข้อมูลที่สำคัญให้ครบถ้วน!");
     return;
   }
@@ -1475,6 +1624,11 @@ async function saveUserAccount() {
     }
   }
 
+  const adUser = isAD ? 'Y' : 'N';
+  await proceedSaveUserAccount(id, username, role, pass, company, max_exemptedHours, adUser);
+}
+
+async function proceedSaveUserAccount(id, username, role, pass, company, max_exemptedHours, adUser) {
   // Find currently logged-in user ID before editing/saving
   let loggedInUserId = null;
   if (session && session.username) {
@@ -1492,6 +1646,7 @@ async function saveUserAccount() {
       pin: pass,
       company,
       max_exemptedHours,
+      adUser,
       adminUsername: session ? session.username : 'System'
     };
     const response = await fetch(`${API_BASE}/api/carpark/users/save`, {
@@ -1503,9 +1658,14 @@ async function saveUserAccount() {
       const resData = await response.json();
       if (resData && resData.success) {
         savedOnBackend = true;
-        // Fetch fresh users data to sync
         await syncUsersWithBackend();
       } else if (resData && resData.error) {
+        alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
+        return;
+      }
+    } else {
+      const resData = await response.json().catch(() => ({}));
+      if (resData && resData.error) {
         alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + resData.error);
         return;
       }
@@ -1519,7 +1679,7 @@ async function saveUserAccount() {
       // Edit User
       const idx = users.findIndex(u => u.id === parseInt(id));
       if (idx !== -1) {
-        users[idx] = { id: parseInt(id), username, role, pass, company, max_exemptedHours };
+        users[idx] = { id: parseInt(id), username, role, pass, company, max_exemptedHours, adUser };
       }
     } else {
       // Add User
@@ -1529,7 +1689,7 @@ async function saveUserAccount() {
         return;
       }
       const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
-      users.push({ id: newId, username, role, pass, company, max_exemptedHours });
+      users.push({ id: newId, username, role, pass, company, max_exemptedHours, adUser });
     }
     // Save to DB
     localStorage.setItem('trrp_db_users', JSON.stringify(users));
@@ -1556,7 +1716,20 @@ function editUserAccount(id) {
   document.getElementById('userId').value = u.id;
   document.getElementById('usrUsername').value = u.username;
   document.getElementById('usrRole').value = u.role;
-  document.getElementById('usrPassword').value = u.pass;
+  document.getElementById('usrPassword').value = u.pass || '';
+
+  const isAD = u.adUser === 'Y';
+  document.getElementById('usrIsAD').checked = isAD;
+
+  const pwdGroup = document.getElementById('usrPasswordGroup');
+  const pwdInput = document.getElementById('usrPassword');
+  if (isAD) {
+    pwdGroup.style.display = 'none';
+    pwdInput.removeAttribute('required');
+  } else {
+    pwdGroup.style.display = 'block';
+    pwdInput.setAttribute('required', 'required');
+  }
 
   // Toggle company selector based on role
   handleUserRoleChange();
@@ -1608,10 +1781,15 @@ function loadUsersFromLocalStorage() {
   const storedUsers = localStorage.getItem('trrp_db_users');
   if (storedUsers) {
     users = JSON.parse(storedUsers);
+    users.forEach(u => {
+      if (u.adUser === undefined) {
+        u.adUser = 'N';
+      }
+    });
   } else {
     users = [
-      { id: 1, username: 'admin', role: 'admin', pass: '1234' },
-      { id: 2, username: 'user1', role: 'user', pass: '1234' }
+      { id: 1, username: 'admin', role: 'admin', pass: '1234', adUser: 'N' },
+      { id: 2, username: 'user1', role: 'user', pass: '1234', adUser: 'N' }
     ];
     localStorage.setItem('trrp_db_users', JSON.stringify(users));
   }
@@ -1626,6 +1804,12 @@ function resetUserForm() {
   document.getElementById('usrUsername').value = '';
   document.getElementById('usrRole').value = 'user';
   document.getElementById('usrPassword').value = '';
+  document.getElementById('usrIsAD').checked = false;
+
+  const pwdGroup = document.getElementById('usrPasswordGroup');
+  const pwdInput = document.getElementById('usrPassword');
+  pwdGroup.style.display = 'block';
+  pwdInput.setAttribute('required', 'required');
 
   // Reset role selection and hide company field
   handleUserRoleChange();

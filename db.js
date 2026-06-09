@@ -4,8 +4,8 @@ import path from 'path';
 const DB_FILE = path.resolve('db.json');
 
 const defaultUsers = [
-  { id: 1, username: "admin", role: "admin", pin: "1234" },
-  { id: 2, username: "user1", role: "user", pin: "1234" }
+  { id: 1, username: "admin", role: "admin", pin: "1234", adUser: "N" },
+  { id: 2, username: "user1", role: "user", pin: "1234", adUser: "N" }
 ];
 
 function initDB() {
@@ -114,6 +114,10 @@ export function readCarparkDB() {
       }
       if (u.max_exemptedHours === undefined) {
         u.max_exemptedHours = null;
+        migrated = true;
+      }
+      if (u.adUser === undefined) {
+        u.adUser = 'N';
         migrated = true;
       }
     });

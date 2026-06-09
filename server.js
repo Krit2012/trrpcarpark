@@ -17,33 +17,103 @@ app.get('/api/carpark/data', (req, res) => {
   res.json(db);
 });
 
+// Expose AD verification proxy endpoint
+app.post('/api/carpark/auth/verify-ad', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ status: "Error", error: "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน AD" });
+  }
+
+  try {
+    const response = await fetch('https://trr-api.trrgroup.com/api_sys_auth/sysauth/Sys_auth_emp_profile_Get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        password,
+        auth_admin_profileModel: {
+          domain_id: "|TRRGROUP.COM|,|TRR.TRRGROUP.COM|,|BSI.TRRGROUP.COM|,|TMI.TRRGROUP.COM|,|TRRSK.TRRGROUP.COM|,|SK.TRRGROUP.COM|,|PS.TRRGROUP.COM|,|CST.TRRGROUP.COM|,"
+        },
+        ParamGetMode: "CHECKAD"
+      })
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error("Error proxying AD verification:", err);
+    res.status(500).json({ status: "Error", error: "ไม่สามารถเชื่อมต่อระบบตรวจสอบสิทธิ์ AD ได้: " + err.message });
+  }
+});
+
 // Added for compatibility with cached legacy clients
-app.post('/api/carpark/login', (req, res) => {
+app.post('/api/carpark/login', async (req, res) => {
   const { username, pin } = req.body;
   if (!username || !pin) {
     return res.status(400).json({ error: "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน" });
   }
 
   const db = readCarparkDB();
+  const lowerUsername = username.trim().toLowerCase();
   const matchedUser = db.users.find(u =>
-    String(u.username).trim().toLowerCase() === username.trim().toLowerCase() &&
-    String(u.pin || u.pass || '1234').trim() === String(pin).trim()
+    String(u.username).trim().toLowerCase() === lowerUsername
   );
 
-  if (matchedUser) {
-    res.json({
-      success: true,
-      user: {
-        username: matchedUser.username,
-        role: matchedUser.role
+  if (!matchedUser) {
+    return res.status(401).json({ error: "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง" });
+  }
+
+  if (matchedUser.adUser === 'Y') {
+    // Authenticate via external TRR AD API
+    try {
+      const response = await fetch('https://trr-api.trrgroup.com/api_sys_auth/sysauth/Sys_auth_emp_profile_Get', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          password: pin,
+          auth_admin_profileModel: {
+            domain_id: "|TRRGROUP.COM|,|TRR.TRRGROUP.COM|,|BSI.TRRGROUP.COM|,|TMI.TRRGROUP.COM|,|TRRSK.TRRGROUP.COM|,|SK.TRRGROUP.COM|,|PS.TRRGROUP.COM|,|CST.TRRGROUP.COM|,"
+          },
+          ParamGetMode: "CHECKAD"
+        })
+      });
+      const data = await response.json();
+      if (data && data.status === 'Success') {
+        const empUrl = data.employee_url || (data.data ? data.data.employee_url : null);
+        res.json({
+          success: true,
+          user: {
+            username: matchedUser.username,
+            role: matchedUser.role,
+            employeeUrl: empUrl
+          }
+        });
+      } else {
+        const errMsg = (data && data.error) ? data.error : "การตรวจสอบสิทธิ์ AD ล้มเหลว";
+        res.status(401).json({ error: errMsg });
       }
-    });
+    } catch (err) {
+      res.status(500).json({ error: "ไม่สามารถเชื่อมต่อระบบตรวจสอบสิทธิ์ AD ได้: " + err.message });
+    }
   } else {
-    res.status(401).json({ error: "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง" });
+    // Normal user check
+    const pinVal = String(matchedUser.pin || matchedUser.pass || '1234').trim();
+    if (String(pin).trim() === pinVal) {
+      res.json({
+        success: true,
+        user: {
+          username: matchedUser.username,
+          role: matchedUser.role
+        }
+      });
+    } else {
+      res.status(401).json({ error: "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง" });
+    }
   }
 });
+
 app.post('/api/carpark/users/save', (req, res) => {
-  const { id, username, role, pin, company, max_exemptedHours, adminUsername } = req.body;
+  const { id, username, role, pin, company, max_exemptedHours, adUser, adminUsername } = req.body;
   if (!username || !role || !adminUsername) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -57,11 +127,11 @@ app.post('/api/carpark/users/save', (req, res) => {
     return res.status(400).json({ error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว" });
   }
 
-  if (!pin || String(pin).trim() === "") {
+  if (adUser !== 'Y' && (!pin || String(pin).trim() === "")) {
     return res.status(400).json({ error: "กรุณาระบุรหัสผ่าน" });
   }
 
-  const pinVal = String(pin).trim();
+  const pinVal = adUser === 'Y' ? null : String(pin).trim();
   let user;
   let actionText = "";
 
@@ -77,11 +147,12 @@ app.post('/api/carpark/users/save', (req, res) => {
     user.username = username.trim();
     user.role = role;
     user.pin = pinVal;
+    user.adUser = adUser || 'N';
     user.company = company || null;
     user.max_exemptedHours = maxExemptVal;
     
     db.users[userIndex] = user;
-    actionText = `แก้ไขข้อมูลผู้ใช้งาน: ${username} (Role: ${role})`;
+    actionText = `แก้ไขข้อมูลผู้ใช้งาน: ${username} (Role: ${role}, AD: ${user.adUser})`;
   } else {
     // Add User
     const newId = db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
@@ -90,12 +161,13 @@ app.post('/api/carpark/users/save', (req, res) => {
       username: username.trim(),
       role: role,
       pin: pinVal,
+      adUser: adUser || 'N',
       company: company || null,
       max_exemptedHours: maxExemptVal
     };
     
     db.users.push(user);
-    actionText = `เพิ่มผู้ใช้งานใหม่: ${username} (Role: ${role})`;
+    actionText = `เพิ่มผู้ใช้งานใหม่: ${username} (Role: ${role}, AD: ${user.adUser})`;
   }
 
   const log = logCarparkAction(adminUsername, actionText);
@@ -282,6 +354,20 @@ app.post('/api/carpark/parking/save', (req, res) => {
   }
 
   const db = readCarparkDB();
+
+  // Validate duplicate plate for parked vehicles
+  if (status === 'parked') {
+    const lowercasePlate = plate.trim().toLowerCase();
+    const duplicate = db.parkingLogs.find(l => 
+      l.status === 'parked' && 
+      l.plate.trim().toLowerCase() === lowercasePlate && 
+      (!id || l.id !== Number(id))
+    );
+    if (duplicate) {
+      return res.status(400).json({ error: `ทะเบียนรถ "${plate.trim()}" มีอยู่ในระบบและยังไม่ได้บันทึกออก` });
+    }
+  }
+
   let logRecord;
   let actionText = "";
 

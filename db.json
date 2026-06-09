@@ -6,7 +6,8 @@
       "role": "admin",
       "pin": "1234",
       "company": null,
-      "max_exemptedHours": null
+      "max_exemptedHours": null,
+      "adUser": "N"
     },
     {
       "id": 2,
@@ -14,7 +15,8 @@
       "role": "user",
       "pin": "1234",
       "company": null,
-      "max_exemptedHours": null
+      "max_exemptedHours": null,
+      "adUser": "N"
     },
     {
       "id": 3,
@@ -22,15 +24,17 @@
       "role": "user",
       "pin": "5678",
       "company": null,
-      "max_exemptedHours": null
+      "max_exemptedHours": null,
+      "adUser": "N"
     },
     {
       "id": 4,
       "username": "kim",
-      "role": "user",
+      "role": "Validator",
       "pin": "1234",
-      "company": null,
-      "max_exemptedHours": null
+      "company": "กลุ่มบริษัท บิลเดอร์",
+      "max_exemptedHours": 10,
+      "adUser": "N"
     },
     {
       "id": 5,
@@ -38,13 +42,24 @@
       "role": "user",
       "pin": "abcd",
       "company": null,
-      "max_exemptedHours": null
+      "max_exemptedHours": null,
+      "adUser": "N"
     },
     {
       "id": 6,
       "username": "rod",
       "role": "user",
       "pin": "1234",
+      "company": null,
+      "max_exemptedHours": null,
+      "adUser": "N"
+    },
+    {
+      "id": 7,
+      "username": "krit.suw",
+      "role": "admin",
+      "pin": null,
+      "adUser": "Y",
       "company": null,
       "max_exemptedHours": null
     }
@@ -163,55 +178,21 @@
       "exemptedAt": "2026-06-04T11:58:54.011Z"
     },
     {
-      "id": 10010,
-      "plate": "3กก3333",
-      "timeIn": "2026-06-04T11:57:00.000Z",
-      "timeOut": null,
+      "id": 10013,
+      "plate": "4456",
+      "timeIn": "2026-06-09T03:24:00.000Z",
+      "timeOut": "2026-06-09T08:28:57.217Z",
       "createdBy": "admin",
-      "createdAt": "2026-06-04T11:57:26.909Z",
-      "updatedBy": null,
-      "updatedAt": null,
-      "status": "parked",
-      "amount": 0,
-      "coupons": 0,
-      "exemptedHours": null,
-      "exemptedCompany": null,
-      "exemptedBy": null,
-      "exemptedAt": null
-    },
-    {
-      "id": 10011,
-      "plate": "3กก3333",
-      "timeIn": "2026-06-04T11:57:00.000Z",
-      "timeOut": null,
-      "createdBy": "admin",
-      "createdAt": "2026-06-04T11:57:59.342Z",
-      "updatedBy": null,
-      "updatedAt": null,
-      "status": "parked",
-      "amount": 0,
-      "coupons": 0,
-      "exemptedHours": null,
-      "exemptedCompany": null,
-      "exemptedBy": null,
-      "exemptedAt": null
-    },
-    {
-      "id": 10012,
-      "plate": "3กก3333",
-      "timeIn": "2026-06-04T11:58:00.000Z",
-      "timeOut": null,
-      "createdBy": "admin",
-      "createdAt": "2026-06-04T11:58:42.663Z",
-      "updatedBy": null,
-      "updatedAt": null,
-      "status": "parked",
-      "amount": 0,
-      "coupons": 0,
-      "exemptedHours": null,
-      "exemptedCompany": null,
-      "exemptedBy": null,
-      "exemptedAt": null
+      "createdAt": "2026-06-09T08:24:30.814Z",
+      "updatedBy": "admin",
+      "updatedAt": "2026-06-09T08:28:57.220Z",
+      "status": "checked_out",
+      "amount": 40,
+      "coupons": 2,
+      "exemptedHours": 1,
+      "exemptedCompany": "กลุ่มบริษัท บิลเดอร์",
+      "exemptedBy": "kim",
+      "exemptedAt": "2026-06-09T08:28:31.333Z"
     }
   ],
   "settings": {
