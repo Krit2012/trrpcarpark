@@ -329,6 +329,8 @@ function checkSession() {
       roleBadge.textContent = 'แอดมิน';
     } else if (session.role === 'Validator') {
       roleBadge.textContent = 'ผู้บันทึกสิทธิ์';
+    } else if (session.role === 'BuildingAdmin') {
+      roleBadge.textContent = 'ผู้ดูแลฝ่ายอาคาร';
     } else {
       roleBadge.textContent = 'ผู้ใช้งาน';
     }
@@ -354,6 +356,17 @@ function checkSession() {
       
       // Admin starts at Dashboard
       switchMainScreen('dashboard');
+    } else if (session.role === 'BuildingAdmin') {
+      navTabCheckIn.style.display = 'block';
+      navTabCheckOut.style.display = 'block';
+      navTabDashboard.style.display = 'block';
+      navTabMonthly.style.display = 'block';
+      navTabExempt.style.display = 'block';
+      navTabCompanies.style.display = 'none';
+      navTabUsers.style.display = 'none';
+      
+      // Building Admin starts at Check-in
+      switchMainScreen('checkin');
     } else if (session.role === 'Validator') {
       navTabCheckIn.style.display = 'none';
       navTabCheckOut.style.display = 'none';
@@ -586,7 +599,7 @@ function handleUserRoleChange() {
   
   if (!companyGroup || !companySelect) return;
 
-  if (role === 'Validator') {
+  if (role === 'Validator' || role === 'BuildingAdmin') {
     companyGroup.style.display = 'block';
     companySelect.required = true;
     companySelect.disabled = false;
@@ -726,10 +739,21 @@ function renderDailyLogsTable() {
     }
 
     // Lookup monthly membership status
-    const isMonthly = monthlyVehicles.some(mv => mv.plate === log.plate);
-    const statusBadge = isMonthly 
-      ? `<span class="badge-type moto" style="font-size:10px;">รถรายเดือน</span>`
-      : `<span class="badge-type car" style="font-size:10px;">รถทั่วไป</span>`;
+    const monthlyMember = monthlyVehicles.find(mv => mv.plate === log.plate);
+    const isMonthly = !!monthlyMember;
+    
+    let statusBadge;
+    if (isMonthly) {
+      const timeInMonthStr = log.timeIn.slice(0, 7); // e.g. "2026-06"
+      const isExpired = timeInMonthStr > monthlyMember.expMonth;
+      if (isExpired) {
+        statusBadge = `<span class="badge-type moto" style="font-size:10px;">รถรายเดือน<span style="color: var(--danger); font-weight: bold;">(ยังไม่ชำระเงิน)</span></span>`;
+      } else {
+        statusBadge = `<span class="badge-type moto" style="font-size:10px;">รถรายเดือน</span>`;
+      }
+    } else {
+      statusBadge = `<span class="badge-type car" style="font-size:10px;">รถทั่วไป</span>`;
+    }
 
     const userIn = log.createdBy || 'System';
     const userOut = log.updatedBy || '-';
@@ -738,6 +762,11 @@ function renderDailyLogsTable() {
     const couponsVal = log.coupons || 0;
     const exemptedHoursVal = log.exemptedHours ? `${log.exemptedHours} ชม.` : '-';
     const exemptedCompanyVal = log.exemptedCompany || '-';
+
+    const actionButtons = (session && session.role === 'BuildingAdmin')
+      ? `<span style="color: var(--text-muted);">-</span>`
+      : `<button class="btn-action-edit" onclick="openEditParkingLogModal(${log.id})">แก้ไข</button>
+         <button class="btn-action-checkout" onclick="deleteParkingLog(${log.id})">ลบ</button>`;
 
     tr.innerHTML = `
       <td class="td-plate">${log.plate}</td>
@@ -751,8 +780,7 @@ function renderDailyLogsTable() {
       <td>${exemptedCompanyVal}</td>
       <td style="font-size: 11.5px; color: var(--text-muted);">${usersMeta}</td>
       <td style="text-align: center; white-space: nowrap;">
-        <button class="btn-action-edit" onclick="openEditParkingLogModal(${log.id})">แก้ไข</button>
-        <button class="btn-action-checkout" onclick="deleteParkingLog(${log.id})">ลบ</button>
+        ${actionButtons}
       </td>
     `;
     tbody.appendChild(tr);
@@ -1569,6 +1597,9 @@ function renderUsersTable() {
     } else if (u.role === 'Validator') {
       const maxHours = u.max_exemptedHours !== undefined && u.max_exemptedHours !== null ? u.max_exemptedHours : 72;
       roleText = `ผู้บันทึกสิทธิ์ (${u.company || '-'} / Max: ${maxHours} ชม.)`;
+    } else if (u.role === 'BuildingAdmin') {
+      const maxHours = u.max_exemptedHours !== undefined && u.max_exemptedHours !== null ? u.max_exemptedHours : 72;
+      roleText = `ผู้ดูแลฝ่ายอาคาร (${u.company || '-'} / Max: ${maxHours} ชม.)`;
     }
     
     // Disable delete on self or on the last admin
@@ -1604,20 +1635,20 @@ async function saveUserAccount() {
   const role = document.getElementById('usrRole').value;
   const isAD = document.getElementById('usrIsAD').checked;
   const pass = isAD ? '' : document.getElementById('usrPassword').value.trim();
-  const company = role === 'Validator' ? document.getElementById('usrCompany').value : null;
-  const max_exemptedHours = role === 'Validator' ? parseInt(document.getElementById('usrMaxExemptHours').value) : null;
+  const company = (role === 'Validator' || role === 'BuildingAdmin') ? document.getElementById('usrCompany').value : null;
+  const max_exemptedHours = (role === 'Validator' || role === 'BuildingAdmin') ? parseInt(document.getElementById('usrMaxExemptHours').value) : null;
 
   if (!username || !role || (!isAD && !pass)) {
     alert("กรุณากรอกข้อมูลที่สำคัญให้ครบถ้วน!");
     return;
   }
 
-  if (role === 'Validator' && !company) {
-    alert("กรุณาเลือกบริษัทผู้เช่าสำหรับบทบาทผู้บันทึกสิทธิ์!");
+  if ((role === 'Validator' || role === 'BuildingAdmin') && !company) {
+    alert("กรุณาเลือกบริษัทผู้เช่าสำหรับบทบาทนี้!");
     return;
   }
 
-  if (role === 'Validator') {
+  if (role === 'Validator' || role === 'BuildingAdmin') {
     if (isNaN(max_exemptedHours) || max_exemptedHours < 1 || max_exemptedHours > 72) {
       alert("กรุณาระบุจำนวนชั่วโมงยกเว้นค่าจอดรถสูงสุดเป็นตัวเลขระหว่าง 1 ถึง 72!");
       return;
@@ -1733,7 +1764,7 @@ function editUserAccount(id) {
 
   // Toggle company selector based on role
   handleUserRoleChange();
-  if (u.role === 'Validator') {
+  if (u.role === 'Validator' || u.role === 'BuildingAdmin') {
     document.getElementById('usrCompany').value = u.company || '';
     document.getElementById('usrMaxExemptHours').value = (u.max_exemptedHours !== undefined && u.max_exemptedHours !== null) ? u.max_exemptedHours : '';
   }

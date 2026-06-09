@@ -135,7 +135,7 @@ app.post('/api/carpark/users/save', (req, res) => {
   let user;
   let actionText = "";
 
-  const maxExemptVal = role === 'Validator' ? (max_exemptedHours !== undefined && max_exemptedHours !== null ? Number(max_exemptedHours) : null) : null;
+  const maxExemptVal = (role === 'Validator' || role === 'BuildingAdmin') ? (max_exemptedHours !== undefined && max_exemptedHours !== null ? Number(max_exemptedHours) : null) : null;
 
   if (id) {
     // Edit User

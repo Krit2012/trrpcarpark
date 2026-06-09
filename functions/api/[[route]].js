@@ -282,7 +282,7 @@ export async function onRequest(context) {
       let savedUser;
       const pinVal = adUser === 'Y' ? null : String(pin).trim();
       const companyVal = company || null;
-      const maxExemptVal = role === 'Validator' ? (max_exemptedHours !== undefined && max_exemptedHours !== null ? Number(max_exemptedHours) : null) : null;
+      const maxExemptVal = (role === 'Validator' || role === 'BuildingAdmin') ? (max_exemptedHours !== undefined && max_exemptedHours !== null ? Number(max_exemptedHours) : null) : null;
       const adUserVal = adUser || 'N';
 
       if (id) {
