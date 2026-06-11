@@ -602,7 +602,7 @@ function populateCompanyDropdowns() {
     monCompanySelect.innerHTML = '<option value="">-- เลือกบริษัทผู้เช่า --</option>';
     tenantCompanies.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c.name;
+      opt.value = c.code; // store the company CODE in monthly_vehicles.company
       opt.textContent = `${c.code} - ${c.name}`;
       monCompanySelect.appendChild(opt);
     });
@@ -732,6 +732,12 @@ function renderDashboard() {
   renderDailyLogsTable();
 }
 
+// Set the "จำนวนข้อมูลทั้งหมด" badge after a table title
+function setTableCount(elId, n) {
+  const el = document.getElementById(elId);
+  if (el) el.textContent = `จำนวนข้อมูลทั้งหมด: ${n} รายการ`;
+}
+
 function renderDailyLogsTable() {
   const tbody = document.getElementById('dashLogsTableBody');
   tbody.innerHTML = '';
@@ -771,6 +777,7 @@ function renderDailyLogsTable() {
       ? 'ไม่มีรถจอดอยู่ในอาคารขณะนี้'
       : `ไม่มีประวัติรถจอดตามเงื่อนไขที่เลือกในวันที่ ${selectedDashDate}`;
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${emptyMsg}</td></tr>`;
+    setTableCount('dashLogsCount', 0);
     return;
   }
 
@@ -868,6 +875,7 @@ function renderDailyLogsTable() {
   if (dashSearch && matchCount === 0) {
     tbody.innerHTML = `<tr><td colspan="13" class="empty-state">ไม่พบรายการที่ตรงกับ "${dashSearch}"</td></tr>`;
   }
+  setTableCount('dashLogsCount', matchCount);
 }
 
 function filterDashboard(filterType) {
@@ -1551,21 +1559,31 @@ function updateMonthlyCompanyFilter() {
   const select = document.getElementById('monthlyFilterCompany');
   if (!select) return;
   const currentVal = select.value;
-  
-  // Get unique companies
-  const companies = [...new Set(monthlyVehicles.map(mv => (mv.company || '').trim()).filter(c => c))].sort();
-  
-  let html = `<option value="">ทั้งหมด</option>`;
-  companies.forEach(c => {
-    html += `<option value="${c}">${c}</option>`;
+
+  // tenant_companies lookup by lowercased code
+  const tenantByCode = {};
+  tenantCompanies.forEach(c => { tenantByCode[String(c.code || '').toLowerCase()] = c; });
+
+  // Distinct company codes that actually appear in monthly_vehicles (case-insensitive),
+  // joined to tenant_companies.code to show the company name.
+  const seen = new Map(); // lowerCode -> { value: canonical code, label: company name }
+  monthlyVehicles.forEach(mv => {
+    const raw = String(mv.company || '').trim();
+    if (!raw) return;
+    const key = raw.toLowerCase();
+    if (seen.has(key)) return;
+    const t = tenantByCode[key];
+    seen.set(key, { value: t ? t.code : raw, label: t ? t.name : raw });
   });
+
+  const items = [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, 'th'));
+  let html = `<option value="">ทั้งหมด</option>`;
+  items.forEach(it => { html += `<option value="${it.value}">${it.label}</option>`; });
   select.innerHTML = html;
-  
-  if (companies.includes(currentVal)) {
-    select.value = currentVal;
-  } else {
-    select.value = "";
-  }
+
+  // Restore previous selection (case-insensitive)
+  const match = items.find(it => it.value.toLowerCase() === currentVal.toLowerCase());
+  select.value = match ? match.value : "";
 }
 
 function clearMonthlyCompanyFilter() {
@@ -1586,19 +1604,27 @@ function renderMonthlyTable() {
   if (clearBtn) clearBtn.style.display = filterCompany ? 'inline-flex' : 'none';
   const filterSearch = document.getElementById('monthlyFilterSearch') ? document.getElementById('monthlyFilterSearch').value.toLowerCase() : '';
 
+  // Map company CODE -> company NAME from tenant_companies (for display + search)
+  const companyNameByCode = {};
+  tenantCompanies.forEach(c => { companyNameByCode[String(c.code || '').toLowerCase()] = c.name; });
+
   let filtered = monthlyVehicles;
-  
+
   if (filterCompany) {
     filtered = filtered.filter(mv => mv.company.toLowerCase() === filterCompany);
   }
-  
+
   if (filterSearch) {
-    filtered = filtered.filter(mv => 
-      mv.plate.toLowerCase().includes(filterSearch) ||
-      mv.owner.toLowerCase().includes(filterSearch) ||
-      mv.company.toLowerCase().includes(filterSearch)
-    );
+    filtered = filtered.filter(mv => {
+      const companyName = companyNameByCode[String(mv.company || '').toLowerCase()] || '';
+      const statusText = mv.isExecutive ? 'ผู้บริหาร' : '';
+      // Search across every column shown in the table (incl. company name)
+      const haystack = `${mv.plate} ${mv.owner} ${mv.company} ${companyName} ${mv.expMonth} ${statusText}`.toLowerCase();
+      return haystack.includes(filterSearch);
+    });
   }
+
+  setTableCount('monthlyCount', filtered.length);
 
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">ไม่มีข้อมูลสมาชิกรถรายเดือน</td></tr>`;
@@ -1610,7 +1636,10 @@ function renderMonthlyTable() {
     const statusText = mv.isExecutive ? '👑 ผู้บริหาร' : '';
     const statusClass = mv.isExecutive ? 'role-badge admin' : '';
     const statusSpan = mv.isExecutive ? `<span class="${statusClass}">${statusText}</span>` : '';
-    
+
+    // Show company name looked up by code (fallback to stored value if not found)
+    const companyDisplay = companyNameByCode[String(mv.company || '').toLowerCase()] || mv.company;
+
     // Expiry check
     const now = new Date();
     const currentMonthString = now.toISOString().slice(0, 7);
@@ -1621,7 +1650,7 @@ function renderMonthlyTable() {
     tr.innerHTML = `
       <td class="td-plate">${mv.plate}</td>
       <td>${mv.owner}</td>
-      <td>${mv.company}</td>
+      <td>${companyDisplay}</td>
       <td style="${expiryStyle}">${expiryText}</td>
       <td>${statusSpan}</td>
       <td style="text-align: center;">
@@ -1635,16 +1664,25 @@ function renderMonthlyTable() {
 
 async function saveMonthlyVehicle() {
   const id = document.getElementById('monthlyId').value;
-  const plate = document.getElementById('monPlate').value.trim();
+  // Strip ALL spaces from the plate before saving
+  const plate = document.getElementById('monPlate').value.replace(/\s/g, '');
   const owner = document.getElementById('monOwner').value.trim();
   const company = document.getElementById('monCompany').value.trim();
   const expMonth = document.getElementById('monExpMonth').value;
   const isExecutive = document.getElementById('monIsExecutive').checked;
 
-  if (!plate || !owner || !company || !expMonth) {
+  if (!plate) {
+    alert("กรุณาระบุทะเบียนรถ (ทะเบียนรถห้ามเป็นค่าว่าง)!");
+    document.getElementById('monPlate').focus();
+    return;
+  }
+  if (!owner || !company || !expMonth) {
     alert("กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน!");
     return;
   }
+
+  // Reflect the cleaned plate back into the form field
+  document.getElementById('monPlate').value = plate;
 
   // Try to save to central backend first
   let savedOnBackend = false;
@@ -1707,7 +1745,9 @@ function editMonthlyVehicle(id) {
   document.getElementById('monthlyId').value = mv.id;
   document.getElementById('monPlate').value = mv.plate;
   document.getElementById('monOwner').value = mv.owner;
-  document.getElementById('monCompany').value = mv.company;
+  // Match dropdown to tenant_companies.code case-insensitively (use canonical code as the option value)
+  const matchedCompany = tenantCompanies.find(c => String(c.code || '').toLowerCase() === String(mv.company || '').toLowerCase());
+  document.getElementById('monCompany').value = matchedCompany ? matchedCompany.code : mv.company;
   document.getElementById('monExpMonth').value = mv.expMonth;
   document.getElementById('monIsExecutive').checked = mv.isExecutive;
 
@@ -1832,6 +1872,7 @@ function renderUsersTable() {
   if (matchCount === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${filterSearch ? `ไม่พบผู้ใช้งานที่ตรงกับ "${filterSearch}"` : 'ไม่มีบัญชีผู้ใช้งาน'}</td></tr>`;
   }
+  setTableCount('usersCount', matchCount);
 }
 
 async function saveUserAccount() {
@@ -2175,6 +2216,24 @@ async function importMonthlyFromExcel(inputEl) {
       return;
     }
 
+    // Validate: company column must match an existing tenant_companies.code (case-insensitive)
+    const validCodes = new Set(tenantCompanies.map(c => String(c.code || '').trim().toLowerCase()));
+    const invalidCompanies = new Set();
+    importedVehicles.forEach(v => {
+      if (!validCodes.has(v.company.toLowerCase())) {
+        invalidCompanies.add(v.company);
+      }
+    });
+    if (invalidCompanies.size > 0) {
+      const badList = [...invalidCompanies].join(', ');
+      const compMsg = `❌ ไม่สามารถนำเข้าได้: ไม่พบรหัสบริษัทในระบบ ${invalidCompanies.size} รหัส (${badList}) กรุณาตรวจสอบให้ column บริษัทตรงกับรหัสบริษัท (Code) ที่มีอยู่ในระบบก่อนนำเข้า`;
+      resultEl.innerHTML = `<span style="color:var(--color-danger);">${compMsg}</span>`;
+      alert(compMsg);
+      inputEl.value = '';
+      fileNameEl.textContent = 'ยังไม่ได้เลือกไฟล์';
+      return;
+    }
+
     // Confirm before replacing all data
     const confirmed = confirm(
       `⚠️ ยืนยันการนำเข้าข้อมูล?\n\n` +
@@ -2269,6 +2328,7 @@ function renderCompaniesTable() {
 
   if (tenantCompanies.length === 0) {
     tbody.innerHTML = `<tr><td colspan="3" class="empty-state">ไม่มีข้อมูลบริษัทผู้เช่า</td></tr>`;
+    setTableCount('companiesCount', 0);
     return;
   }
 
@@ -2279,6 +2339,8 @@ function renderCompaniesTable() {
         (c.code || '').toLowerCase().includes(filterSearch) ||
         (c.name || '').toLowerCase().includes(filterSearch))
     : tenantCompanies;
+
+  setTableCount('companiesCount', filtered.length);
 
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="3" class="empty-state">ไม่พบบริษัทที่ตรงกับ "${filterSearch}"</td></tr>`;
@@ -2304,8 +2366,19 @@ async function saveCompany() {
   const code = document.getElementById('compCode').value.trim();
   const name = document.getElementById('compName').value.trim();
 
-  if (!code || !name) {
-    alert("กรุณากรอกข้อมูลรหัสบริษัทและชื่อบริษัท!");
+  if (!code) {
+    alert("กรุณาระบุรหัสบริษัท (รหัสบริษัทห้ามเป็นค่าว่าง)!");
+    document.getElementById('compCode').focus();
+    return;
+  }
+  if (/\s/.test(code)) {
+    alert("รหัสบริษัทห้ามมีช่องว่าง (space)!");
+    document.getElementById('compCode').focus();
+    return;
+  }
+  if (!name) {
+    alert("กรุณาระบุชื่อบริษัท!");
+    document.getElementById('compName').focus();
     return;
   }
 

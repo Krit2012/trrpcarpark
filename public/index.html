@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>TRRP Car Park v1.4.4 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
+  <title>TRRP Car Park v1.4.5 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
   <meta name="description" content="ระบบจัดการที่จอดรถ เช็คอิน-เช็คเอาท์ คิดเงินค่าบริการ และพนักงานรายเดือนแบบเรียลไทม์">
   
   <!-- Google Fonts -->
@@ -30,7 +30,7 @@
     <div class="login-card">
       <div class="login-logo-header">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
-        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.4</span></h2>
+        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.5</span></h2>
         <p>ระบบจัดการและคิดเงินค่าจอดรถอัจฉริยะ</p>
       </div>
       
@@ -64,7 +64,7 @@
       <div class="brand">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
         <div>
-          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.4</span></h1>
+          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.5</span></h1>
           <p class="brand-sub">ระบบบริหารจัดการที่จอดรถและคำนวณค่าบริการอัจฉริยะ</p>
         </div>
       </div>
@@ -359,6 +359,7 @@
           <h3 class="panel-title flex-title">
             <span class="active-badge"></span>
             บันทึกประวัติรถเข้า-ออกของวันที่เลือก (Parking Logs for Selected Date)
+            <span id="dashLogsCount" class="table-count-badge"></span>
           </h3>
           <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             <input type="text" id="dashLogsFilterSearch" class="input-field" style="width:220px; height:34px; font-size:12px;" placeholder="ค้นหาทุกค่าในตาราง..." oninput="renderDailyLogsTable()">
@@ -409,7 +410,7 @@
               
               <div class="form-group">
                 <label for="monPlate">ทะเบียนรถ (License Plate)*</label>
-                <input type="text" id="monPlate" class="input-field" placeholder="เช่น 1กก1111" required>
+                <input type="text" id="monPlate" class="input-field" placeholder="เช่น 1กก1111" required oninput="this.value=this.value.replace(/\s/g,'')">
               </div>
               
               <div class="form-group">
@@ -468,10 +469,11 @@
         <!-- List table of Monthly members -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
           <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <h3 class="panel-title" style="margin:0;">📋 รายชื่อสมาชิกรถรายเดือน</h3>
+            <h3 class="panel-title" style="margin:0;">📋 รายชื่อสมาชิกรถรายเดือน <span id="monthlyCount" class="table-count-badge"></span></h3>
             <div style="display:flex; gap:10px;">
               <div style="display:flex; align-items:center; gap:4px;">
-                <select id="monthlyFilterCompany" class="input-field" style="width:160px; height:34px; font-size:12px;" onchange="renderMonthlyTable()">
+                <label for="monthlyFilterCompany" style="font-size:12px; font-weight:600; white-space:nowrap;">บริษัท:</label>
+                <select id="monthlyFilterCompany" class="input-field" style="width:auto; min-width:140px; max-width:340px; height:34px; font-size:12px;" onchange="renderMonthlyTable()">
                   <option value="">ทั้งหมด</option>
                 </select>
                 <button type="button" id="monthlyFilterCompanyClear" class="filter-clear-btn" title="ล้างตัวกรองบริษัท" onclick="clearMonthlyCompanyFilter()">✕</button>
@@ -486,7 +488,7 @@
                 <tr>
                   <th>ทะเบียนรถ</th>
                   <th>เจ้าของ</th>
-                  <th>กลุ่มบริษัท</th>
+                  <th>บริษัท</th>
                   <th>สิ้นสุดสัญญา</th>
                   <th>สถานะ</th>
                   <th style="text-align: center;">จัดการ</th>
@@ -562,7 +564,7 @@
         <!-- List table of users -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
           <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <h3 class="panel-title" style="margin:0;">👥 บัญชีผู้ใช้งานระบบทั้งหมด (User Management Accounts)</h3>
+            <h3 class="panel-title" style="margin:0;">👥 บัญชีผู้ใช้งานระบบทั้งหมด (User Management Accounts) <span id="usersCount" class="table-count-badge"></span></h3>
             <input type="text" id="usersFilterSearch" class="input-field" style="width:200px; height:34px; font-size:12px;" placeholder="ค้นหาผู้ใช้ / บทบาท / บริษัท..." oninput="renderUsersTable()">
           </div>
           
@@ -612,6 +614,7 @@
 
             <div style="display:flex; gap:10px; margin-top:12px;">
               <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกบริษัท</button>
+              <button type="button" class="btn btn-outline-secondary" style="height: 42px;" onclick="resetCompanyForm()">♻️ ล้างข้อมูล</button>
               <button type="button" id="btnCancelCompEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetCompanyForm()">ยกเลิก</button>
             </div>
           </form>
@@ -620,7 +623,7 @@
         <!-- List table of companies -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
           <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <h3 class="panel-title" style="margin:0;">🏢 รายชื่อบริษัทผู้เช่าทั้งหมด (Tenant Companies)</h3>
+            <h3 class="panel-title" style="margin:0;">🏢 รายชื่อบริษัทผู้เช่าทั้งหมด (Tenant Companies) <span id="companiesCount" class="table-count-badge"></span></h3>
             <input type="text" id="companiesFilterSearch" class="input-field" style="width:200px; height:34px; font-size:12px;" placeholder="ค้นหารหัส / ชื่อบริษัท..." oninput="renderCompaniesTable()">
           </div>
           
@@ -779,6 +782,6 @@
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Core Script with Version Cache Buster -->
-  <script src="app.js?v=1.4.4"></script>
+  <script src="app.js?v=1.4.5"></script>
 </body>
 </html>
