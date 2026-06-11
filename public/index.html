@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TRRP Car Park v1.4.3 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>TRRP Car Park v1.4.4 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
   <meta name="description" content="ระบบจัดการที่จอดรถ เช็คอิน-เช็คเอาท์ คิดเงินค่าบริการ และพนักงานรายเดือนแบบเรียลไทม์">
   
   <!-- Google Fonts -->
@@ -27,7 +30,7 @@
     <div class="login-card">
       <div class="login-logo-header">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
-        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.3</span></h2>
+        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.4</span></h2>
         <p>ระบบจัดการและคิดเงินค่าจอดรถอัจฉริยะ</p>
       </div>
       
@@ -61,7 +64,7 @@
       <div class="brand">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
         <div>
-          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.3</span></h1>
+          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.4</span></h1>
           <p class="brand-sub">ระบบบริหารจัดการที่จอดรถและคำนวณค่าบริการอัจฉริยะ</p>
         </div>
       </div>
@@ -214,9 +217,17 @@
                     <span style="font-size:12px; color:var(--text-muted);">ลดหย่อนสูงสุดไม่เกินค่าจอดจริง</span>
                   </div>
                 </div>
+
+                <div class="coupon-input-box" style="margin-top: 8px; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 6px;">
+                  <label for="chkOutTransfer" style="font-size:12px; display:block; margin-bottom:4px;">เงินโอน (บาท):</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="chkOutTransfer" class="input-field" style="max-width:100px; padding: 6px;" min="0" oninput="recalculateCoupons()">
+                    <span style="font-size:12px; color:var(--text-muted);">หักยอดเงินโอนออกจากยอดชำระเงินสด</span>
+                  </div>
+                </div>
                 
                 <div class="bill-total-row">
-                  <span>จำนวนเงินค่าจอด:</span>
+                  <span>ยอดชำระเงินสด:</span>
                   <span class="total-price" id="chkOutTotalAmount">฿160.00</span>
                 </div>
               </div>
@@ -274,12 +285,16 @@
             <button class="btn btn-outline-danger" id="btnShowAllLogs" onclick="filterDashboard('all')" style="height: 38px; padding: 0 16px; display: none;">
               📋 แสดงข้อมูลทั้งหมด
             </button>
-            <button class="btn btn-primary" onclick="exportDailyLogsToExcel()" style="height: 38px; padding: 0 16px;">
+            <button class="btn btn-primary" onclick="openExportModal()" style="height: 38px; padding: 0 16px;">
               📥 ส่งออกรายงาน (Excel)
             </button>
           </div>
         </div>
         <div class="time-ticker-box">
+          <div style="display:flex; align-items:center; justify-content: flex-end; gap:8px; margin-bottom: 8px;">
+            <label for="totalParkingSpaces" style="font-size:12px; font-weight:600;">จำนวนช่องจอดรถทั้งหมด:</label>
+            <input type="number" id="totalParkingSpaces" class="input-field" style="width: 80px; padding: 4px; font-size: 12px; text-align: center;" min="0" oninput="updateAvailableSpacesBox()" onblur="saveTotalParkingSpaces()">
+          </div>
           <span id="tickerText">ข้อมูลระบบ: -- / -- / ---- --:--:--</span>
         </div>
       </div>
@@ -295,6 +310,19 @@
             <span class="stat-title">จำนวนรถจอดในอาคารตอนนี้</span>
             <span class="stat-value" id="statOccupiedNow">0</span>
             <span class="stat-label">คัน (ไม่ระบุเวลาออก)</span>
+          </div>
+        </div>
+
+        <div class="stat-card spaces" id="cardAvailable" style="cursor: default;">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-title">จำนวนช่องจอดรถที่ว่าง</span>
+            <span class="stat-value" id="statAvailableNow">-</span>
+            <span class="stat-label">คัน (ช่องจอดทั้งหมด - รถที่จอดอยู่)</span>
           </div>
         </div>
 
@@ -320,7 +348,7 @@
           <div class="stat-info">
             <span class="stat-title">รายได้สะสม</span>
             <span class="stat-value" id="statRevenueAmount">฿0.00</span>
-            <span class="stat-label">เฉพาะรายการเช็คเอาท์ตามวันที่เลือก</span>
+            <span class="stat-label" id="statRevenueLabel">เฉพาะรายการเช็คเอาท์ตามวันที่เลือก</span>
           </div>
         </div>
       </div>
@@ -332,7 +360,9 @@
             <span class="active-badge"></span>
             บันทึกประวัติรถเข้า-ออกของวันที่เลือก (Parking Logs for Selected Date)
           </h3>
-          <span style="font-size:12px; color:var(--text-muted);">* สามารถกดลบแถวรายการด้านล่างได้หากบันทึกทะเบียนรถผิด</span>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <input type="text" id="dashLogsFilterSearch" class="input-field" style="width:220px; height:34px; font-size:12px;" placeholder="ค้นหาทุกค่าในตาราง..." oninput="renderDailyLogsTable()">
+          </div>
         </div>
         <div class="table-wrapper">
           <table class="data-table">
@@ -345,6 +375,8 @@
                 <th>ระยะเวลาจอด</th>
                 <th>ค่าบริการ</th>
                 <th>คูปอง (ใบ)</th>
+                <th>เงินโอน</th>
+                <th>เงินสด</th>
                 <th>ยกเว้น (ชม.)</th>
                 <th>บริษัท</th>
                 <th>ผู้บันทึก (เข้า/ออก)</th>
@@ -435,8 +467,17 @@
 
         <!-- List table of Monthly members -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
-          <div class="panel-header">
-            <h3 class="panel-title">📋 รายชื่อสมาชิกรถรายเดือน (Monthly Registered Members)</h3>
+          <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <h3 class="panel-title" style="margin:0;">📋 รายชื่อสมาชิกรถรายเดือน</h3>
+            <div style="display:flex; gap:10px;">
+              <div style="display:flex; align-items:center; gap:4px;">
+                <select id="monthlyFilterCompany" class="input-field" style="width:160px; height:34px; font-size:12px;" onchange="renderMonthlyTable()">
+                  <option value="">ทั้งหมด</option>
+                </select>
+                <button type="button" id="monthlyFilterCompanyClear" class="filter-clear-btn" title="ล้างตัวกรองบริษัท" onclick="clearMonthlyCompanyFilter()">✕</button>
+              </div>
+              <input type="text" id="monthlyFilterSearch" class="input-field" style="width:160px; height:34px; font-size:12px;" placeholder="ค้นหา..." oninput="renderMonthlyTable()">
+            </div>
           </div>
           
           <div class="table-wrapper">
@@ -520,8 +561,9 @@
 
         <!-- List table of users -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
-          <div class="panel-header">
-            <h3 class="panel-title">👥 บัญชีผู้ใช้งานระบบทั้งหมด (User Management Accounts)</h3>
+          <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <h3 class="panel-title" style="margin:0;">👥 บัญชีผู้ใช้งานระบบทั้งหมด (User Management Accounts)</h3>
+            <input type="text" id="usersFilterSearch" class="input-field" style="width:200px; height:34px; font-size:12px;" placeholder="ค้นหาผู้ใช้ / บทบาท / บริษัท..." oninput="renderUsersTable()">
           </div>
           
           <div class="table-wrapper">
@@ -577,8 +619,9 @@
 
         <!-- List table of companies -->
         <div class="workspace-panel shadow-sm" style="flex: 1.5;">
-          <div class="panel-header">
-            <h3 class="panel-title">🏢 รายชื่อบริษัทผู้เช่าทั้งหมด (Tenant Companies)</h3>
+          <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <h3 class="panel-title" style="margin:0;">🏢 รายชื่อบริษัทผู้เช่าทั้งหมด (Tenant Companies)</h3>
+            <input type="text" id="companiesFilterSearch" class="input-field" style="width:200px; height:34px; font-size:12px;" placeholder="ค้นหารหัส / ชื่อบริษัท..." oninput="renderCompaniesTable()">
           </div>
           
           <div class="table-wrapper">
@@ -712,11 +755,30 @@
     </div>
   </div>
 
-
+  <!-- EXCEL EXPORT MODAL -->
+  <div id="exportModal" class="login-screen-overlay" style="display: none; z-index: 2000;">
+    <div class="login-card" style="max-width: 400px;">
+      <div class="panel-header" style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+        <h3 class="panel-title">📥 ส่งออกรายงาน Excel</h3>
+      </div>
+      <div class="form-group">
+        <label for="exportStartDate">วันที่เริ่มต้น</label>
+        <input type="date" id="exportStartDate" class="input-field" required>
+      </div>
+      <div class="form-group">
+        <label for="exportEndDate">วันที่สิ้นสุด</label>
+        <input type="date" id="exportEndDate" class="input-field" required>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button type="button" class="btn btn-primary" style="flex: 1; height: 42px;" onclick="exportDailyLogsToExcel()">ส่งออก</button>
+        <button type="button" class="btn btn-outline-danger" style="flex: 1; height: 42px;" onclick="closeExportModal()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
 
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Core Script with Version Cache Buster -->
-  <script src="app.js?v=1.1.0"></script>
+  <script src="app.js?v=1.4.4"></script>
 </body>
 </html>

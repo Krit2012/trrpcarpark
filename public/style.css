@@ -502,6 +502,32 @@ body.dark-mode .moon-icon { display: block; }
 .stat-card.occupied .stat-icon { background: rgba(79, 70, 229, 0.1); color: var(--primary); }
 .stat-card.available .stat-icon { background: rgba(16, 185, 129, 0.1); color: var(--success); }
 .stat-card.revenue .stat-icon { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+.stat-card.spaces .stat-icon { background: rgba(6, 182, 212, 0.1); color: #06b6d4; }
+
+/* Filter clear (✕) button — matches dropdown height */
+.filter-clear-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.filter-clear-btn:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 
 /* Panels & Cards */
 .workspace-panel {

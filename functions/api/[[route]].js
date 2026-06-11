@@ -98,9 +98,19 @@ export async function onRequest(context) {
         await env.DB.prepare("ALTER TABLE parking_logs ADD COLUMN exemptedHours INTEGER DEFAULT NULL").run();
         await env.DB.prepare("ALTER TABLE parking_logs ADD COLUMN exemptedCompany TEXT DEFAULT NULL").run();
         await env.DB.prepare("ALTER TABLE parking_logs ADD COLUMN exemptedBy TEXT DEFAULT NULL").run();
-        await env.DB.prepare("ALTER TABLE parking_logs ADD COLUMN exemptedAt TEXT DEFAULT NULL").run();
       } catch (err) {
         console.error("Migration error parking_logs exemption:", err);
+      }
+    }
+
+    try {
+      // 4. Column: transferAmount in parking_logs
+      await env.DB.prepare("SELECT transferAmount FROM parking_logs LIMIT 1").all();
+    } catch (e) {
+      try {
+        await env.DB.prepare("ALTER TABLE parking_logs ADD COLUMN transferAmount INTEGER DEFAULT 0").run();
+      } catch (err) {
+        console.error("Migration error parking_logs transferAmount:", err);
       }
     }
 
@@ -122,6 +132,7 @@ export async function onRequest(context) {
       const settings = {};
       settingsRes.results.forEach(s => {
         if (s.key === "syncVersion") settings.syncVersion = Number(s.value);
+        if (s.key === "totalParkingSpaces") settings.totalParkingSpaces = Number(s.value);
       });
 
       // 3. Fetch Logs
@@ -145,6 +156,7 @@ export async function onRequest(context) {
         ...l,
         id: Number(l.id),
         amount: Number(l.amount || 0),
+        transferAmount: Number(l.transferAmount || 0),
         coupons: Number(l.coupons || 0),
         exemptedHours: l.exemptedHours !== null && l.exemptedHours !== undefined ? Number(l.exemptedHours) : null
       }));
@@ -429,6 +441,37 @@ export async function onRequest(context) {
       return resJson({ success: true });
     }
 
+    // POST /api/carpark/monthly/bulk-replace
+    if (path === "/api/carpark/monthly/bulk-replace" && method === "POST") {
+      const { vehicles, adminUsername } = await request.json();
+      if (!Array.isArray(vehicles) || adminUsername === undefined) {
+        return resJson({ error: "Missing required fields" }, 400);
+      }
+
+      await env.DB.prepare("DELETE FROM monthly_vehicles").run();
+      
+      const statements = [];
+      for (const v of vehicles) {
+        const isExecVal = v.isExecutive ? 1 : 0;
+        statements.push(env.DB.prepare(
+          "INSERT INTO monthly_vehicles (plate, owner, company, expMonth, isExecutive) VALUES (?, ?, ?, ?, ?)"
+        ).bind(String(v.plate).trim(), String(v.owner).trim(), String(v.company).trim(), String(v.expMonth), isExecVal));
+      }
+      
+      if (statements.length > 0) {
+        await env.DB.batch(statements);
+      }
+
+      const logText = `นำเข้าข้อมูลสมาชิกรถรายเดือนใหม่ทั้งหมด จำนวน ${vehicles.length} รายการ`;
+      const logTime = new Date().toISOString();
+      await env.DB.prepare(
+        "INSERT INTO logs (username, action, timestamp) VALUES (?, ?, ?)"
+      ).bind(adminUsername, logText, logTime).run();
+
+      await bumpCarparkSyncVersionD1(env.DB);
+      return resJson({ success: true, count: vehicles.length });
+    }
+
     // POST /api/carpark/monthly/save
     if (path === "/api/carpark/monthly/save" && method === "POST") {
       const { id, plate, owner, company, expMonth, isExecutive, adminUsername } = await request.json();
@@ -509,7 +552,7 @@ export async function onRequest(context) {
 
     // POST /api/carpark/parking/save
     if (path === "/api/carpark/parking/save" && method === "POST") {
-      const { id, plate, timeIn, timeOut, createdBy, updatedBy, status, amount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt } = await request.json();
+      const { id, plate, timeIn, timeOut, createdBy, updatedBy, status, amount, transferAmount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt } = await request.json();
       if (!plate || !timeIn || !status || createdBy === undefined) {
         return resJson({ error: "Missing required fields" }, 400);
       }
@@ -536,6 +579,7 @@ export async function onRequest(context) {
 
         const outVal = timeOut || null;
         const amtVal = Number(amount || 0);
+        const transAmtVal = Number(transferAmount || 0);
         const cpVal = Number(coupons || 0);
         const upUser = updatedBy || null;
         const upTime = updatedBy ? new Date().toISOString() : null;
@@ -547,16 +591,17 @@ export async function onRequest(context) {
         const exAt = exemptedAt !== undefined ? exemptedAt : exists.exemptedAt;
 
         await env.DB.prepare(
-          `UPDATE parking_logs SET plate = ?, timeIn = ?, timeOut = ?, status = ?, amount = ?, coupons = ?, updatedBy = ?, updatedAt = ?, exemptedHours = ?, exemptedCompany = ?, exemptedBy = ?, exemptedAt = ? WHERE id = ?`
-        ).bind(plate.trim(), timeIn, outVal, status, amtVal, cpVal, upUser, upTime, exHours, exCompany, exBy, exAt, Number(id)).run();
+          `UPDATE parking_logs SET plate = ?, timeIn = ?, timeOut = ?, status = ?, amount = ?, transferAmount = ?, coupons = ?, updatedBy = ?, updatedAt = ?, exemptedHours = ?, exemptedCompany = ?, exemptedBy = ?, exemptedAt = ? WHERE id = ?`
+        ).bind(plate.trim(), timeIn, outVal, status, amtVal, transAmtVal, cpVal, upUser, upTime, exHours, exCompany, exBy, exAt, Number(id)).run();
 
-        logRecord = { id: Number(id), plate: plate.trim(), timeIn, timeOut: outVal, status, amount: amtVal, coupons: cpVal, createdBy: exists.createdBy, createdAt: exists.createdAt, updatedBy: upUser, updatedAt: upTime, exemptedHours: exHours, exemptedCompany: exCompany, exemptedBy: exBy, exemptedAt: exAt };
+        logRecord = { id: Number(id), plate: plate.trim(), timeIn, timeOut: outVal, status, amount: amtVal, transferAmount: transAmtVal, coupons: cpVal, createdBy: exists.createdBy, createdAt: exists.createdAt, updatedBy: upUser, updatedAt: upTime, exemptedHours: exHours, exemptedCompany: exCompany, exemptedBy: exBy, exemptedAt: exAt };
         actionText = status === 'checked_out'
           ? `บันทึกรถออก: ${plate} (ยอดชำระ: ฿${amount})`
           : `แก้ไขประวัติจอดรถ: ${plate}`;
       } else {
         const insTime = new Date().toISOString();
         const amtVal = Number(amount || 0);
+        const transAmtVal = Number(transferAmount || 0);
         const cpVal = Number(coupons || 0);
         const exHours = exemptedHours !== undefined && exemptedHours !== null ? Number(exemptedHours) : null;
         const exCompany = exemptedCompany !== undefined ? exemptedCompany : null;
@@ -564,14 +609,15 @@ export async function onRequest(context) {
         const exAt = exemptedAt !== undefined ? exemptedAt : null;
         
         const insertRes = await env.DB.prepare(
-          `INSERT INTO parking_logs (plate, timeIn, timeOut, createdBy, createdAt, status, amount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt) 
-           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`
-        ).bind(plate.trim(), timeIn, createdBy, insTime, status, amtVal, cpVal, exHours, exCompany, exBy, exAt).first();
+          `INSERT INTO parking_logs (plate, timeIn, timeOut, createdBy, createdAt, status, amount, transferAmount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt) 
+           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`
+        ).bind(plate.trim(), timeIn, createdBy, insTime, status, amtVal, transAmtVal, cpVal, exHours, exCompany, exBy, exAt).first();
 
         logRecord = {
           ...insertRes,
           id: Number(insertRes.id),
           amount: Number(insertRes.amount || 0),
+          transferAmount: Number(insertRes.transferAmount || 0),
           coupons: Number(insertRes.coupons || 0),
           exemptedHours: insertRes.exemptedHours !== null && insertRes.exemptedHours !== undefined ? Number(insertRes.exemptedHours) : null
         };
@@ -606,6 +652,25 @@ export async function onRequest(context) {
       await env.DB.prepare(
         "INSERT INTO logs (username, action, timestamp) VALUES (?, ?, ?)"
       ).bind(adminUsername, logText, logTime).run();
+
+      await bumpCarparkSyncVersionD1(env.DB);
+      return resJson({ success: true });
+    }
+
+    // POST /api/carpark/settings/save
+    if (path === "/api/carpark/settings/save" && method === "POST") {
+      const { key, value, adminUsername } = await request.json();
+      if (!key || value === undefined) {
+        return resJson({ error: "Missing key or value" }, 400);
+      }
+
+      await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key, String(value)).run();
+
+      const logText = `บันทึกการตั้งค่า ${key} = ${value}`;
+      const logTime = new Date().toISOString();
+      await env.DB.prepare(
+        "INSERT INTO logs (username, action, timestamp) VALUES (?, ?, ?)"
+      ).bind(adminUsername || 'System', logText, logTime).run();
 
       await bumpCarparkSyncVersionD1(env.DB);
       return resJson({ success: true });

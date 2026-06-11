@@ -156,6 +156,17 @@ function loadLogsFromLocalStorage() {
   const storedLogs = localStorage.getItem('trrp_db_logs');
   if (storedLogs) {
     logs = JSON.parse(storedLogs);
+    // Backfill missing transferAmount field from old cached data
+    let needsSave = false;
+    logs.forEach(log => {
+      if (log.transferAmount === undefined) {
+        log.transferAmount = 0;
+        needsSave = true;
+      }
+    });
+    if (needsSave) {
+      localStorage.setItem('trrp_db_logs', JSON.stringify(logs));
+    }
   } else {
     const now = new Date();
     // Seed some mock parked cars
@@ -282,6 +293,7 @@ async function syncAllDataWithBackend() {
           updatedAt: l.updatedAt || null,
           status: l.status,
           amount: Number(l.amount || 0),
+          transferAmount: Number(l.transferAmount || 0),
           coupons: Number(l.coupons || 0),
           exemptedHours: l.exemptedHours !== null && l.exemptedHours !== undefined ? Number(l.exemptedHours) : null,
           exemptedCompany: l.exemptedCompany || null,
@@ -293,6 +305,14 @@ async function syncAllDataWithBackend() {
           renderDashboard();
         }
       }
+
+      // 5. Sync Settings
+      if (data.settings && data.settings.totalParkingSpaces !== undefined) {
+        const el = document.getElementById('totalParkingSpaces');
+        if (el) el.value = data.settings.totalParkingSpaces;
+      }
+
+      updateMonthlyCompanyFilter();
     }
   } catch (error) {
     console.warn("Could not sync all data with backend, using offline cache:", error);
@@ -630,6 +650,31 @@ function handleDashDateChange() {
   renderDashboard();
 }
 
+// Recompute and refresh the "available spaces" box from live parked count + total spaces input
+function updateAvailableSpacesBox() {
+  const statAvailable = document.getElementById('statAvailableNow');
+  if (!statAvailable) return;
+  const occupiedNowCount = logs.filter(l => l.status === 'parked').length;
+  const totalEl = document.getElementById('totalParkingSpaces');
+  const totalSpaces = parseInt(totalEl ? totalEl.value : 0) || 0;
+  statAvailable.textContent = totalSpaces > 0 ? Math.max(0, totalSpaces - occupiedNowCount) : '-';
+}
+
+async function saveTotalParkingSpaces() {
+  const val = document.getElementById('totalParkingSpaces').value;
+  // Refresh the available box immediately (don't wait for the network)
+  updateAvailableSpacesBox();
+  try {
+    await fetch(`${API_BASE}/api/carpark/settings/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'totalParkingSpaces', value: val, adminUsername: session ? session.username : 'System' })
+    });
+  } catch (err) {
+    console.error("Could not save total parking spaces", err);
+  }
+}
+
 function renderDashboard() {
   // Synchronize date picker input value
   document.getElementById('dashDateSelector').value = selectedDashDate;
@@ -647,12 +692,23 @@ function renderDashboard() {
   });
   
   const checkedOutCount = selectedDateLogs.length;
-  const revenueTotal = selectedDateLogs.reduce((sum, log) => sum + (log.amount || 0), 0);
+  const cashTotal = selectedDateLogs.reduce((sum, log) => sum + (log.amount || 0), 0);
+  const transferTotal = selectedDateLogs.reduce((sum, log) => sum + (log.transferAmount || 0), 0);
+  const revenueTotal = cashTotal + transferTotal;
 
   // Update top KPI cards
   document.getElementById('statOccupiedNow').textContent = occupiedNowCount;
+
+  // Update Available Spaces (shared logic — also used on input/save/sync)
+  updateAvailableSpacesBox();
+
   document.getElementById('statCheckedOutToday').textContent = checkedOutCount;
   document.getElementById('statRevenueAmount').textContent = `฿${revenueTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  
+  const revenueLabel = document.getElementById('statRevenueLabel');
+  if (revenueLabel) {
+    revenueLabel.innerHTML = `เงินสด ฿${cashTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })} | เงินโอน ฿${transferTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  }
 
   // Update card active highlights
   const cards = {
@@ -679,6 +735,9 @@ function renderDashboard() {
 function renderDailyLogsTable() {
   const tbody = document.getElementById('dashLogsTableBody');
   tbody.innerHTML = '';
+
+  const dashSearchEl = document.getElementById('dashLogsFilterSearch');
+  const dashSearch = dashSearchEl ? dashSearchEl.value.trim().toLowerCase() : '';
 
   // Filter logs based on active filter
   let filtered;
@@ -718,6 +777,7 @@ function renderDailyLogsTable() {
   // Sort logs by timeIn descending
   const sorted = [...filtered].sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn));
 
+  let matchCount = 0;
   sorted.forEach(log => {
     const tr = document.createElement('tr');
     
@@ -762,6 +822,17 @@ function renderDailyLogsTable() {
     const couponsVal = log.coupons || 0;
     const exemptedHoursVal = log.exemptedHours ? `${log.exemptedHours} ชม.` : '-';
     const exemptedCompanyVal = log.exemptedCompany || '-';
+    
+    // Calculate new columns
+    let durationHours = 0;
+    if (log.timeOut) {
+      const diffMs = new Date(log.timeOut) - timeIn;
+      durationHours = Math.ceil(diffMs / (60 * 60 * 1000));
+    }
+    const serviceFeeAmount = log.timeOut ? Math.max(0, (durationHours - 1) * 20) : 0;
+    const serviceFeeStr = log.timeOut ? '฿' + serviceFeeAmount.toFixed(2) : '-';
+    const transferAmountStr = log.timeOut ? '฿' + (log.transferAmount || 0).toFixed(2) : '-';
+    const cashAmountStr = log.timeOut ? '฿' + (log.amount || 0).toFixed(2) : '-';
 
     const actionButtons = (session && session.role === 'BuildingAdmin')
       ? `<span style="color: var(--text-muted);">-</span>`
@@ -774,8 +845,10 @@ function renderDailyLogsTable() {
       <td>${timeInStr}</td>
       <td>${timeOutStr}</td>
       <td>${elapsedStr}</td>
-      <td style="font-weight: 700; color: var(--primary)">${log.timeOut ? '฿' + log.amount.toFixed(2) : '-'}</td>
+      <td>${serviceFeeStr}</td>
       <td>${couponsVal}</td>
+      <td>${transferAmountStr}</td>
+      <td style="font-weight: 700; color: var(--primary)">${cashAmountStr}</td>
       <td>${exemptedHoursVal}</td>
       <td>${exemptedCompanyVal}</td>
       <td style="font-size: 11.5px; color: var(--text-muted);">${usersMeta}</td>
@@ -783,8 +856,18 @@ function renderDailyLogsTable() {
         ${actionButtons}
       </td>
     `;
+
+    // Free-text filter: match any value shown in the row
+    if (dashSearch && !tr.textContent.toLowerCase().includes(dashSearch)) {
+      return;
+    }
+    matchCount++;
     tbody.appendChild(tr);
   });
+
+  if (dashSearch && matchCount === 0) {
+    tbody.innerHTML = `<tr><td colspan="13" class="empty-state">ไม่พบรายการที่ตรงกับ "${dashSearch}"</td></tr>`;
+  }
 }
 
 function filterDashboard(filterType) {
@@ -974,53 +1057,92 @@ async function deleteParkingLog(logId) {
 }
 
 // Export Daily Logs to Excel
+function openExportModal() {
+  document.getElementById('exportStartDate').value = selectedDashDate;
+  document.getElementById('exportEndDate').value = selectedDashDate;
+  document.getElementById('exportModal').style.display = 'flex';
+}
+
+function closeExportModal() {
+  document.getElementById('exportModal').style.display = 'none';
+}
+
 function exportDailyLogsToExcel() {
+  const startDateStr = document.getElementById('exportStartDate').value;
+  const endDateStr = document.getElementById('exportEndDate').value;
+  
+  if (!startDateStr || !endDateStr) {
+    alert("กรุณาระบุวันที่เริ่มต้นและสิ้นสุด");
+    return;
+  }
+  
+  // Filter rules:
+  // - Checked-out cars: check-out DATE (ignore time) must be within [start, end].
+  // - Still-parked cars: check-in DATE (ignore time) must be <= end.
   const filtered = logs.filter(l => {
-    const timeInDate = l.timeIn.split('T')[0];
-    const timeOutDate = l.timeOut ? l.timeOut.split('T')[0] : null;
-    const isSelectedDate = (timeInDate === selectedDashDate || timeOutDate === selectedDashDate);
-    const isCurrentlyParked = (l.status === 'parked');
-    return isSelectedDate || isCurrentlyParked;
+    if (l.timeOut) {
+      const timeOutDate = l.timeOut.split('T')[0];
+      return timeOutDate >= startDateStr && timeOutDate <= endDateStr;
+    } else {
+      const timeInDate = l.timeIn.split('T')[0];
+      return timeInDate <= endDateStr;
+    }
   });
 
   if (filtered.length === 0) {
-    alert(`ไม่มีข้อมูลรายการจอดรถที่จะทำการส่งออกได้`);
+    alert(`ไม่มีข้อมูลรายการจอดรถในช่วงวันที่เลือก`);
     return;
   }
 
-  // Map to format suitable for Excel
-  const excelData = filtered.map(log => {
+  // Order: checked-out rows first (by check-out time asc),
+  // then still-parked rows (by check-in time asc).
+  const checkedOut = filtered
+    .filter(l => l.timeOut)
+    .sort((a, b) => new Date(a.timeOut) - new Date(b.timeOut));
+  const stillParked = filtered
+    .filter(l => !l.timeOut)
+    .sort((a, b) => new Date(a.timeIn) - new Date(b.timeIn));
+  const ordered = [...checkedOut, ...stillParked];
+
+  // Map to the requested column layout
+  const excelData = ordered.map(log => {
     const timeIn = new Date(log.timeIn).toLocaleString('th-TH');
     const timeOut = log.timeOut ? new Date(log.timeOut).toLocaleString('th-TH') : "ยังไม่เช็คเอาท์";
-    
+
     let elapsedStr = '-';
+    let serviceFee = 0;
     if (log.timeOut) {
       const diffMs = new Date(log.timeOut) - new Date(log.timeIn);
       const elapsedMinutes = Math.floor(diffMs / (60 * 1000));
       const hours = Math.floor(elapsedMinutes / 60);
       const mins = elapsedMinutes % 60;
       elapsedStr = `${hours}:${String(mins).padStart(2, '0')} ชั่วโมง`;
+      // Service fee = (rounded-up hours - 1 free) * rate  (matches dashboard "ค่าบริการ")
+      const durationHours = Math.ceil(diffMs / (60 * 60 * 1000));
+      serviceFee = Math.max(0, (durationHours - 1) * HOURLY_RATE);
     }
 
     const isMonthly = monthlyVehicles.some(mv => mv.plate === log.plate);
     const memberType = isMonthly ? "รถรายเดือน" : "รถทั่วไป";
-    const amountVal = log.timeOut ? log.amount : 0;
-    const userIn = log.createdBy || 'System';
-    const userOut = log.updatedBy || '-';
+
+    const cashAmount = log.timeOut ? (log.amount || 0) : 0;
+    const transferAmount = log.timeOut ? (log.transferAmount || 0) : 0;
 
     return {
       "ทะเบียนรถ": log.plate,
       "สถานะสมาชิก": memberType,
       "วันเวลาเข้า": timeIn,
       "วันเวลาออก": timeOut,
-      "ระยะเวลาจอด (ชั่วโมง)": elapsedStr,
-      "ค่าบริการ (บาท)": amountVal,
+      "ระยะเวลาจอด": elapsedStr,
+      "ค่าบริการ": serviceFee,
       "คูปอง(ใบ)": log.coupons || 0,
-      "ยกเว้น(ชั่วโมง)": log.exemptedHours || 0,
+      "เงินโอน": transferAmount,
+      "เงินสด": cashAmount,
+      "ยกเว้น (ชม.)": log.exemptedHours || 0,
       "บริษัท": log.exemptedCompany || "-",
       "ผู้บันทึกยกเว้น": log.exemptedBy || "-",
-      "ผู้เช็คอิน": userIn,
-      "ผู้เช็คเอาท์": userOut
+      "ผู้เช็คอิน": log.createdBy || 'System',
+      "ผู้เช็คเอาท์": log.updatedBy || '-'
     };
   });
 
@@ -1030,7 +1152,8 @@ function exportDailyLogsToExcel() {
   XLSX.utils.book_append_sheet(workbook, worksheet, "Parking Logs");
 
   // Generate file and trigger download
-  XLSX.writeFile(workbook, `parking_report_${selectedDashDate}.xlsx`);
+  XLSX.writeFile(workbook, `parking_report_${startDateStr}_to_${endDateStr}.xlsx`);
+  closeExportModal();
 }
 
 // ==========================================
@@ -1256,11 +1379,12 @@ function selectAutocompleteVehicle(plate) {
     const totalRoundedHours = Math.ceil(diffMins / 60);
     const exemptHours = Number(matchedLog.exemptedHours || 0);
     const payableHours = Math.max(0, totalRoundedHours - FREE_HOURS - exemptHours);
-    
+
     currentPayableBaseAmount = payableHours * HOURLY_RATE;
     
     // Do not default calculated coupons - set to 0 as requested
     document.getElementById('chkOutCoupons').value = 0;
+    document.getElementById('chkOutTransfer').value = '';
     
     // Toggle exemption row visibility
     const exemptRow = document.getElementById('chkOutExemptRow');
@@ -1275,8 +1399,8 @@ function selectAutocompleteVehicle(plate) {
 
     // Populate text details
     document.getElementById('chkOutDurationDisplay').textContent = `${durationStr} ชั่วโมง`;
-    document.getElementById('chkOutFreeDisplay').textContent = `${FREE_HOURS} ชั่วโมง`;
-    document.getElementById('chkOutPayableHoursDisplay').textContent = `${payableHours}:00 ชั่วโมง`;
+    document.getElementById('chkOutFreeDisplay').textContent = `${FREE_HOURS}`;
+    document.getElementById('chkOutPayableHoursDisplay').textContent = `${payableHours}:00`;
     
     // Render initial amount
     recalculateCoupons();
@@ -1307,7 +1431,14 @@ function recalculateCoupons() {
     document.getElementById('chkOutCoupons').value = maxCoupons;
   }
 
-  const finalAmount = Math.max(0, currentPayableBaseAmount - (coupons * 20));
+  let transferAmount = parseFloat(document.getElementById('chkOutTransfer').value);
+  if (isNaN(transferAmount) || transferAmount < 0) {
+    transferAmount = 0;
+  }
+
+  const remainingAfterCoupons = Math.max(0, currentPayableBaseAmount - (coupons * 20));
+  const finalAmount = Math.max(0, remainingAfterCoupons - transferAmount);
+  
   document.getElementById('chkOutTotalAmount').textContent = `฿${finalAmount.toFixed(2)}`;
 }
 
@@ -1315,6 +1446,8 @@ function cancelCheckoutBill() {
   activeSelectedLog = null;
   currentPayableBaseAmount = 0;
   document.getElementById('chkOutSearchPlate').value = '';
+  document.getElementById('chkOutCoupons').value = 0;
+  document.getElementById('chkOutTransfer').value = '';
   document.getElementById('checkoutDetailsBox').style.display = 'none';
   document.getElementById('checkoutPlaceholder').style.display = 'flex';
   const exemptRow = document.getElementById('chkOutExemptRow');
@@ -1335,11 +1468,14 @@ async function submitCheckOut() {
   // Calculate final numbers
   const isMonthly = monthlyVehicles.some(mv => mv.plate.toLowerCase() === activeSelectedLog.plate.toLowerCase());
   let coupons = 0;
+  let transferAmount = 0;
   let finalAmount = 0;
 
   if (!isMonthly) {
     coupons = parseInt(document.getElementById('chkOutCoupons').value) || 0;
-    finalAmount = Math.max(0, currentPayableBaseAmount - (coupons * 20));
+    transferAmount = parseFloat(document.getElementById('chkOutTransfer').value) || 0;
+    const remainingAfterCoupons = Math.max(0, currentPayableBaseAmount - (coupons * 20));
+    finalAmount = Math.max(0, remainingAfterCoupons - transferAmount);
   }
 
   // Try to save to central backend first
@@ -1354,6 +1490,7 @@ async function submitCheckOut() {
       updatedBy: session.username,
       status: 'checked_out',
       amount: finalAmount,
+      transferAmount: transferAmount,
       coupons
     };
     const response = await fetch(`${API_BASE}/api/carpark/parking/save`, {
@@ -1380,6 +1517,7 @@ async function submitCheckOut() {
     logs[logIndex].status = 'checked_out';
     logs[logIndex].timeOut = timeOutISO;
     logs[logIndex].amount = finalAmount;
+    logs[logIndex].transferAmount = transferAmount;
     logs[logIndex].coupons = coupons;
     logs[logIndex].updatedBy = session.username;
     logs[logIndex].updatedAt = now.toISOString();
@@ -1406,21 +1544,72 @@ async function submitCheckOut() {
 }
 
 // ==========================================
-// 💳 SCREEN 4: MONTHLY REGISTERED CRUD
+// Monthly Vehicles Management
 // ==========================================
+
+function updateMonthlyCompanyFilter() {
+  const select = document.getElementById('monthlyFilterCompany');
+  if (!select) return;
+  const currentVal = select.value;
+  
+  // Get unique companies
+  const companies = [...new Set(monthlyVehicles.map(mv => (mv.company || '').trim()).filter(c => c))].sort();
+  
+  let html = `<option value="">ทั้งหมด</option>`;
+  companies.forEach(c => {
+    html += `<option value="${c}">${c}</option>`;
+  });
+  select.innerHTML = html;
+  
+  if (companies.includes(currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = "";
+  }
+}
+
+function clearMonthlyCompanyFilter() {
+  const select = document.getElementById('monthlyFilterCompany');
+  if (select) select.value = '';
+  renderMonthlyTable();
+}
+
 function renderMonthlyTable() {
   const tbody = document.getElementById('monthlyTableBody');
   tbody.innerHTML = '';
 
-  if (monthlyVehicles.length === 0) {
+  const companySelect = document.getElementById('monthlyFilterCompany');
+  const filterCompany = companySelect ? companySelect.value.toLowerCase() : '';
+
+  // Toggle clear (✕) button: show only when a company is selected
+  const clearBtn = document.getElementById('monthlyFilterCompanyClear');
+  if (clearBtn) clearBtn.style.display = filterCompany ? 'inline-flex' : 'none';
+  const filterSearch = document.getElementById('monthlyFilterSearch') ? document.getElementById('monthlyFilterSearch').value.toLowerCase() : '';
+
+  let filtered = monthlyVehicles;
+  
+  if (filterCompany) {
+    filtered = filtered.filter(mv => mv.company.toLowerCase() === filterCompany);
+  }
+  
+  if (filterSearch) {
+    filtered = filtered.filter(mv => 
+      mv.plate.toLowerCase().includes(filterSearch) ||
+      mv.owner.toLowerCase().includes(filterSearch) ||
+      mv.company.toLowerCase().includes(filterSearch)
+    );
+  }
+
+  if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">ไม่มีข้อมูลสมาชิกรถรายเดือน</td></tr>`;
     return;
   }
 
-  monthlyVehicles.forEach(mv => {
+  filtered.forEach(mv => {
     const tr = document.createElement('tr');
-    const statusText = mv.isExecutive ? '👑 ผู้บริหาร' : 'ทั่วไป';
-    const statusClass = mv.isExecutive ? 'role-badge admin' : 'role-badge';
+    const statusText = mv.isExecutive ? '👑 ผู้บริหาร' : '';
+    const statusClass = mv.isExecutive ? 'role-badge admin' : '';
+    const statusSpan = mv.isExecutive ? `<span class="${statusClass}">${statusText}</span>` : '';
     
     // Expiry check
     const now = new Date();
@@ -1434,7 +1623,7 @@ function renderMonthlyTable() {
       <td>${mv.owner}</td>
       <td>${mv.company}</td>
       <td style="${expiryStyle}">${expiryText}</td>
-      <td><span class="${statusClass}">${statusText}</span></td>
+      <td>${statusSpan}</td>
       <td style="text-align: center;">
         <button class="btn-action-edit" onclick="editMonthlyVehicle(${mv.id})">แก้ไข</button>
         <button class="btn-action-checkout" onclick="deleteMonthlyVehicle(${mv.id})">ลบ</button>
@@ -1505,6 +1694,7 @@ async function saveMonthlyVehicle() {
     localStorage.setItem('trrp_db_monthly', JSON.stringify(monthlyVehicles));
   }
   
+  updateMonthlyCompanyFilter();
   renderMonthlyTable();
   resetMonthlyForm();
   alert("บันทึกสิทธิ์รถรายเดือนเรียบร้อย!");
@@ -1556,6 +1746,7 @@ async function deleteMonthlyVehicle(id) {
       monthlyVehicles = monthlyVehicles.filter(m => m.id !== id);
       localStorage.setItem('trrp_db_monthly', JSON.stringify(monthlyVehicles));
     }
+    updateMonthlyCompanyFilter();
     renderMonthlyTable();
   }
 }
@@ -1579,9 +1770,13 @@ function renderUsersTable() {
   const tbody = document.getElementById('usersTableBody');
   tbody.innerHTML = '';
 
+  const searchEl = document.getElementById('usersFilterSearch');
+  const filterSearch = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  let matchCount = 0;
+
   users.forEach(u => {
     const tr = document.createElement('tr');
-    
+
     // Mask password
     const isAD = u.adUser === 'Y';
     const passDisplay = isAD
@@ -1624,9 +1819,19 @@ function renderUsersTable() {
         ${deleteButton}
       </td>
     `;
+
+    // Free-text filter: match any displayed value (username, role text, AD, company)
+    if (filterSearch) {
+      const haystack = `${u.username} ${roleText} ${u.role} ${isAD ? 'Y AD User' : 'N'} ${u.company || ''}`.toLowerCase();
+      if (!haystack.includes(filterSearch)) return;
+    }
+    matchCount++;
     tbody.appendChild(tr);
   });
 
+  if (matchCount === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${filterSearch ? `ไม่พบผู้ใช้งานที่ตรงกับ "${filterSearch}"` : 'ไม่มีบัญชีผู้ใช้งาน'}</td></tr>`;
+  }
 }
 
 async function saveUserAccount() {
@@ -1852,6 +2057,57 @@ function resetUserForm() {
 // ==========================================
 // 📂 IMPORT MONTHLY MEMBERS FROM EXCEL
 // ==========================================
+
+// Normalize the "สิ้นสุดสัญญา" cell (column 4) to "YYYY-MM".
+// Accepts: already-correct "YYYY-MM" (kept as-is), Date object, Excel serial
+// number, or common date strings (YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, etc.).
+function normalizeExpMonth(raw) {
+  if (raw === null || raw === undefined) return '';
+
+  const fmt = (y, m) => `${y}-${String(m).padStart(2, '0')}`; // m is 1-based
+
+  // 1. Date object (from cellDates:true)
+  if (raw instanceof Date && !isNaN(raw)) {
+    return fmt(raw.getFullYear(), raw.getMonth() + 1);
+  }
+
+  const str = String(raw).trim();
+  if (!str) return '';
+
+  // 2. Already YYYY-MM -> keep
+  if (/^\d{4}-\d{1,2}$/.test(str)) {
+    const [y, m] = str.split('-');
+    return fmt(y, Number(m));
+  }
+
+  // 3. ISO-like YYYY-MM-DD (or with time) -> take year-month
+  let mt = str.match(/^(\d{4})[-/](\d{1,2})[-/]\d{1,2}/);
+  if (mt) return fmt(mt[1], Number(mt[2]));
+
+  // 4. Pure number = Excel serial date (days since 1899-12-30, UTC)
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const serial = Number(str);
+    const d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+    if (!isNaN(d)) return fmt(d.getUTCFullYear(), d.getUTCMonth() + 1);
+  }
+
+  // 5. DD/MM/YYYY or MM/DD/YYYY -> disambiguate by which part can be a month
+  mt = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (mt) {
+    const a = Number(mt[1]), b = Number(mt[2]), year = mt[3];
+    // b>12 => b is a day, so a is the month (MM/DD). Otherwise assume DD/MM (Thai).
+    const month = b > 12 ? a : b;
+    return fmt(year, month);
+  }
+
+  // 6. Fallback: let Date parse it
+  const d = new Date(str);
+  if (!isNaN(d)) return fmt(d.getFullYear(), d.getMonth() + 1);
+
+  // 7. Give up — return trimmed original (will fail validation downstream)
+  return str;
+}
+
 async function importMonthlyFromExcel(inputEl) {
   const file = inputEl.files[0];
   if (!file) return;
@@ -1871,7 +2127,7 @@ async function importMonthlyFromExcel(inputEl) {
 
   try {
     const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data, { type: 'array' });
+    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
@@ -1889,12 +2145,33 @@ async function importMonthlyFromExcel(inputEl) {
       plate: String(r[0] || '').trim(),
       owner: String(r[1] || '').trim(),
       company: String(r[2] || '').trim(),
-      expMonth: String(r[3] || '').trim(),
+      expMonth: normalizeExpMonth(r[3]),
       isExecutive: String(r[4]).trim() === '1' || String(r[4]).trim().toLowerCase() === 'true'
     })).filter(v => v.plate && v.owner && v.company && v.expMonth);
 
     if (importedVehicles.length === 0) {
       resultEl.innerHTML = '<span style="color:var(--color-danger);">❌ ไม่มีข้อมูลที่ถูกต้อง กรุณาตรวจสอบ format ของไฟล์</span>';
+      return;
+    }
+
+    // Validate: no duplicate plates within the imported file (case-insensitive)
+    const plateSeen = new Map(); // normalized plate -> original plate
+    const duplicatePlates = new Set();
+    importedVehicles.forEach(v => {
+      const key = v.plate.toLowerCase();
+      if (plateSeen.has(key)) {
+        duplicatePlates.add(plateSeen.get(key));
+      } else {
+        plateSeen.set(key, v.plate);
+      }
+    });
+    if (duplicatePlates.size > 0) {
+      const dupList = [...duplicatePlates].join(', ');
+      const dupMsg = `❌ ไม่สามารถนำเข้าได้: พบทะเบียนรถซ้ำกันในไฟล์ ${duplicatePlates.size} ทะเบียน (${dupList}) กรุณาแก้ไขไฟล์ให้ทะเบียนไม่ซ้ำกันก่อนนำเข้า`;
+      resultEl.innerHTML = `<span style="color:var(--color-danger);">${dupMsg}</span>`;
+      alert(dupMsg);
+      inputEl.value = '';
+      fileNameEl.textContent = 'ยังไม่ได้เลือกไฟล์';
       return;
     }
 
@@ -1918,64 +2195,53 @@ async function importMonthlyFromExcel(inputEl) {
     let errorCount = 0;
     const adminUser = session ? session.username : 'System';
 
-    // Step 1: Delete all existing monthly vehicles via API
-    const existingIds = [...monthlyVehicles.map(m => m.id)];
-    for (const id of existingIds) {
-      try {
-        const delRes = await fetch(`${API_BASE}/api/carpark/monthly/delete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, adminUsername: adminUser })
-        });
-        // ignore individual delete errors - best effort
-      } catch (e) {}
-    }
-    // Clear local state
-    monthlyVehicles = [];
-
-    // Step 2: Insert all imported vehicles
-    for (const v of importedVehicles) {
-      try {
-        const saveRes = await fetch(`${API_BASE}/api/carpark/monthly/save`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            plate: v.plate,
-            owner: v.owner,
-            company: v.company,
-            expMonth: v.expMonth,
-            isExecutive: v.isExecutive,
-            adminUsername: adminUser
-          })
-        });
-        if (saveRes.ok) {
-          const res = await saveRes.json();
-          if (res.success) {
-            successCount++;
-            if (res.vehicle) monthlyVehicles.push({
-              id: res.vehicle.id,
-              plate: res.vehicle.plate,
-              owner: res.vehicle.owner,
-              company: res.vehicle.company,
-              expMonth: res.vehicle.expMonth,
-              isExecutive: res.vehicle.isExecutive === 1 || res.vehicle.isExecutive === true
-            });
-          } else {
-            errorCount++;
-          }
+    // Bulk replace via API
+    try {
+      const bulkRes = await fetch(`${API_BASE}/api/carpark/monthly/bulk-replace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicles: importedVehicles, adminUsername: adminUser })
+      });
+      if (bulkRes.ok) {
+        const res = await bulkRes.json();
+        if (res.success) {
+          successCount = res.count;
         } else {
-          errorCount++;
+          throw new Error(res.error || "Unknown error from server");
         }
-      } catch (e) {
-        errorCount++;
+      } else {
+        throw new Error("Failed to connect to server");
       }
+    } catch (e) {
+      errorCount = importedVehicles.length;
+      console.error(e);
+      resultEl.innerHTML = `<span style="color:var(--color-danger);">❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${e.message}</span>`;
+      return; // Stop on critical failure
     }
 
-    // Save to localStorage
+    // Refresh local state immediately from the imported data (no network wait)
+    monthlyVehicles = importedVehicles.map((v, i) => ({
+      id: i + 1,
+      plate: v.plate,
+      owner: v.owner,
+      company: v.company,
+      expMonth: v.expMonth,
+      isExecutive: !!v.isExecutive
+    }));
     localStorage.setItem('trrp_db_monthly', JSON.stringify(monthlyVehicles));
 
-    // Sync fresh data
+    // Clear filters so all imported members are visible right away
+    const mFilterCompany = document.getElementById('monthlyFilterCompany');
+    const mFilterSearch = document.getElementById('monthlyFilterSearch');
+    if (mFilterCompany) mFilterCompany.value = '';
+    if (mFilterSearch) mFilterSearch.value = '';
+
+    updateMonthlyCompanyFilter();
+    renderMonthlyTable();
+
+    // Reconcile with backend in background (authoritative ids/sync version)
     await syncAllDataWithBackend();
+    updateMonthlyCompanyFilter();
     renderMonthlyTable();
 
     // Reset file input
@@ -2006,7 +2272,20 @@ function renderCompaniesTable() {
     return;
   }
 
-  tenantCompanies.forEach(c => {
+  const searchEl = document.getElementById('companiesFilterSearch');
+  const filterSearch = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const filtered = filterSearch
+    ? tenantCompanies.filter(c =>
+        (c.code || '').toLowerCase().includes(filterSearch) ||
+        (c.name || '').toLowerCase().includes(filterSearch))
+    : tenantCompanies;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty-state">ไม่พบบริษัทที่ตรงกับ "${filterSearch}"</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(c => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${c.code}</strong></td>

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS parking_logs (
   updatedAt TEXT DEFAULT NULL,
   status TEXT NOT NULL,
   amount REAL NOT NULL,
+  transferAmount REAL NOT NULL DEFAULT 0,
   coupons INTEGER NOT NULL,
   exemptedHours INTEGER DEFAULT NULL,
   exemptedCompany TEXT DEFAULT NULL,

@@ -32,6 +32,7 @@ function initDB() {
           updatedAt: null,
           status: 'parked',
           amount: 0,
+          transferAmount: 0,
           coupons: 0,
           exemptedHours: null,
           exemptedCompany: null,
@@ -135,6 +136,22 @@ export function readCarparkDB() {
     }
     if (!db.logs) {
       db.logs = [];
+      migrated = true;
+    }
+
+    // Migrate transferAmount field on parkingLogs
+    if (db.parkingLogs) {
+      db.parkingLogs.forEach(log => {
+        if (log.transferAmount === undefined) {
+          log.transferAmount = 0;
+          migrated = true;
+        }
+      });
+    }
+
+    // Migrate totalParkingSpaces in settings
+    if (db.settings && db.settings.totalParkingSpaces === undefined) {
+      db.settings.totalParkingSpaces = 0;
       migrated = true;
     }
 

@@ -9,7 +9,12 @@ const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 
 app.use(express.json({ limit: '50mb' }));
-app.use(express.static('public'));
+// Disable caching so local testing always serves the latest static files
+app.use(express.static('public', {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store')
+}));
 
 // TRRP Carpark APIs
 app.get('/api/carpark/data', (req, res) => {
@@ -347,8 +352,36 @@ app.post('/api/carpark/monthly/delete', (req, res) => {
   res.json({ success: true, log });
 });
 
+app.post('/api/carpark/monthly/bulk-replace', (req, res) => {
+  const { vehicles, adminUsername } = req.body;
+  if (!Array.isArray(vehicles) || adminUsername === undefined) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const db = readCarparkDB();
+  db.monthlyVehicles = []; // Clear existing
+  let currentId = 1;
+
+  for (const v of vehicles) {
+    db.monthlyVehicles.push({
+      id: currentId++,
+      plate: String(v.plate).trim(),
+      owner: String(v.owner).trim(),
+      company: String(v.company).trim(),
+      expMonth: String(v.expMonth),
+      isExecutive: !!v.isExecutive
+    });
+  }
+
+  const log = logCarparkAction(adminUsername, `นำเข้าข้อมูลสมาชิกรถรายเดือนใหม่ทั้งหมด จำนวน ${vehicles.length} รายการ`);
+  bumpCarparkSyncVersion();
+  writeCarparkDB(db);
+
+  res.json({ success: true, count: vehicles.length, log });
+});
+
 app.post('/api/carpark/parking/save', (req, res) => {
-  const { id, plate, timeIn, timeOut, createdBy, updatedBy, status, amount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt } = req.body;
+  const { id, plate, timeIn, timeOut, createdBy, updatedBy, status, amount, transferAmount, coupons, exemptedHours, exemptedCompany, exemptedBy, exemptedAt } = req.body;
   if (!plate || !timeIn || !status || createdBy === undefined) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -382,6 +415,7 @@ app.post('/api/carpark/parking/save', (req, res) => {
     logRecord.timeOut = timeOut || null;
     logRecord.status = status;
     logRecord.amount = Number(amount || 0);
+    logRecord.transferAmount = Number(transferAmount || 0);
     logRecord.coupons = Number(coupons || 0);
     if (exemptedHours !== undefined) logRecord.exemptedHours = exemptedHours;
     if (exemptedCompany !== undefined) logRecord.exemptedCompany = exemptedCompany;
@@ -409,6 +443,7 @@ app.post('/api/carpark/parking/save', (req, res) => {
       updatedAt: null,
       status,
       amount: Number(amount || 0),
+      transferAmount: Number(transferAmount || 0),
       coupons: Number(coupons || 0),
       exemptedHours: exemptedHours !== undefined ? exemptedHours : null,
       exemptedCompany: exemptedCompany !== undefined ? exemptedCompany : null,
@@ -442,6 +477,23 @@ app.post('/api/carpark/parking/delete', (req, res) => {
   db.parkingLogs.splice(idx, 1);
 
   const log = logCarparkAction(adminUsername, `ลบรายการจอดรถ: ${deleted.plate}`);
+  bumpCarparkSyncVersion();
+  writeCarparkDB(db);
+
+  res.json({ success: true, log });
+});
+
+// Settings API
+app.post('/api/carpark/settings/save', (req, res) => {
+  const { key, value, adminUsername } = req.body;
+  if (!key || value === undefined) {
+    return res.status(400).json({ error: "Missing key or value" });
+  }
+
+  const db = readCarparkDB();
+  db.settings[key] = value;
+
+  const log = logCarparkAction(adminUsername || 'System', `บันทึกการตั้งค่า ${key} = ${value}`);
   bumpCarparkSyncVersion();
   writeCarparkDB(db);
 
