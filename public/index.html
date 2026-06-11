@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>TRRP Car Park v1.4.5 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
+  <title>TRRP Car Park v1.4.6 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
   <meta name="description" content="ระบบจัดการที่จอดรถ เช็คอิน-เช็คเอาท์ คิดเงินค่าบริการ และพนักงานรายเดือนแบบเรียลไทม์">
   
   <!-- Google Fonts -->
@@ -30,7 +30,7 @@
     <div class="login-card">
       <div class="login-logo-header">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
-        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.5</span></h2>
+        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.6</span></h2>
         <p>ระบบจัดการและคิดเงินค่าจอดรถอัจฉริยะ</p>
       </div>
       
@@ -64,7 +64,7 @@
       <div class="brand">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
         <div>
-          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.5</span></h1>
+          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.6</span></h1>
           <p class="brand-sub">ระบบบริหารจัดการที่จอดรถและคำนวณค่าบริการอัจฉริยะ</p>
         </div>
       </div>
@@ -441,6 +441,7 @@
 
               <div style="display:flex; gap:10px; margin-top:12px;">
                 <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกสิทธิ์รายเดือน</button>
+                <button type="button" class="btn btn-outline-secondary" style="height: 42px;" onclick="resetMonthlyForm()">♻️ ล้างข้อมูล</button>
                 <button type="button" id="btnCancelMonEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetMonthlyForm()">ยกเลิก</button>
               </div>
             </form>
@@ -556,6 +557,7 @@
 
             <div style="display:flex; gap:10px; margin-top:12px;">
               <button type="submit" class="btn btn-primary" style="flex: 1; height: 42px;">💾 บันทึกผู้ใช้</button>
+              <button type="button" class="btn btn-outline-secondary" style="height: 42px;" onclick="resetUserForm()">♻️ ล้างข้อมูล</button>
               <button type="button" id="btnCancelUsrEdit" class="btn btn-outline-danger" style="display: none; height: 42px;" onclick="resetUserForm()">ยกเลิก</button>
             </div>
           </form>
@@ -782,6 +784,6 @@
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Core Script with Version Cache Buster -->
-  <script src="app.js?v=1.4.5"></script>
+  <script src="app.js?v=1.4.6"></script>
 </body>
 </html>

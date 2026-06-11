@@ -1,15 +1,6 @@
 {
   "users": [
     {
-      "id": 1,
-      "username": "admin",
-      "role": "admin",
-      "pin": "1234",
-      "company": null,
-      "max_exemptedHours": null,
-      "adUser": "N"
-    },
-    {
       "id": 2,
       "username": "user1",
       "role": "user",
@@ -56,6 +47,15 @@
     },
     {
       "id": 7,
+      "username": "admin",
+      "role": "admin",
+      "pin": "1234",
+      "adUser": "N",
+      "company": null,
+      "max_exemptedHours": null
+    },
+    {
+      "id": 8,
       "username": "krit.suw",
       "role": "admin",
       "pin": null,

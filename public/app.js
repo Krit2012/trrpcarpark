@@ -1819,8 +1819,9 @@ function renderUsersTable() {
 
     // Mask password
     const isAD = u.adUser === 'Y';
+    // Password column: blank for AD users, masked PIN for normal users
     const passDisplay = isAD
-      ? `<span style="color: var(--success); font-weight: 600;">(AD User)</span>`
+      ? ``
       : `<span class="pin-masked" title="ชี้เพื่อดูรหัสผ่าน" style="cursor:help;">****</span>`;
 
     const isSelf = u.username.toLowerCase() === session.username.toLowerCase();
@@ -1849,7 +1850,7 @@ function renderUsersTable() {
     tr.innerHTML = `
       <td><strong>${u.username}</strong> ${isSelf ? '(ตัวเอง)' : ''}</td>
       <td><span class="role-badge ${u.role}">${roleText}</span></td>
-      <td>${isAD ? '<span style="color: var(--success); font-weight: 600;">Y</span>' : '<span style="color: var(--text-muted);">N</span>'}</td>
+      <td>${isAD ? '<span title="AD User" style="color: var(--success); font-weight: 700; font-size: 16px;">✔</span>' : ''}</td>
       <td onmouseenter="this.querySelector('.pin-masked') ? this.querySelector('.pin-masked').textContent='${pinVal}' : null"
           onmouseleave="this.querySelector('.pin-masked') ? this.querySelector('.pin-masked').textContent='****' : null">
         ${passDisplay}
