@@ -1,6 +1,6 @@
 {
   "name": "trrp-carpark",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "TRRP Car Park Management Web Application",
   "main": "server.js",
   "type": "module",

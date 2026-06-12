@@ -2628,6 +2628,24 @@
       "exemptedBy": "kim",
       "exemptedAt": "2026-06-11T07:52:59.002Z",
       "transferAmount": 20
+    },
+    {
+      "id": 10016,
+      "plate": "ทบ3333",
+      "timeIn": "2026-06-12T09:43:00.000Z",
+      "timeOut": null,
+      "createdBy": "krit.suw",
+      "createdAt": "2026-06-12T09:43:40.377Z",
+      "updatedBy": null,
+      "updatedAt": null,
+      "status": "parked",
+      "amount": 0,
+      "transferAmount": 0,
+      "coupons": 0,
+      "exemptedHours": null,
+      "exemptedCompany": null,
+      "exemptedBy": null,
+      "exemptedAt": null
     }
   ],
   "settings": {

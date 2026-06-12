@@ -1168,13 +1168,22 @@ function exportDailyLogsToExcel() {
 // 📥 SCREEN 2: CHECK-IN
 // ==========================================
 async function submitCheckIn() {
-  const plate = document.getElementById('chkInPlate').value.trim();
+  // Strip ALL spaces from the plate before saving
+  const plate = document.getElementById('chkInPlate').value.replace(/\s/g, '');
   const customTime = document.getElementById('chkInTime').value;
 
-  if (!plate || !customTime) {
+  if (!plate) {
+    alert("กรุณาระบุทะเบียนรถ (ทะเบียนรถห้ามเป็นค่าว่าง)!");
+    document.getElementById('chkInPlate').focus();
+    return;
+  }
+  if (!customTime) {
     alert("กรุณากรอกข้อมูลทะเบียนรถให้ครบถ้วน!");
     return;
   }
+
+  // Reflect the cleaned plate back into the form field
+  document.getElementById('chkInPlate').value = plate;
 
   // Validate duplicate plate for parked vehicles
   const lowercasePlate = plate.toLowerCase();
@@ -1878,14 +1887,24 @@ function renderUsersTable() {
 
 async function saveUserAccount() {
   const id = document.getElementById('userId').value;
-  const username = document.getElementById('usrUsername').value.trim();
+  // Strip ALL spaces from the username before saving
+  const username = document.getElementById('usrUsername').value.replace(/\s/g, '');
   const role = document.getElementById('usrRole').value;
   const isAD = document.getElementById('usrIsAD').checked;
   const pass = isAD ? '' : document.getElementById('usrPassword').value.trim();
   const company = (role === 'Validator' || role === 'BuildingAdmin') ? document.getElementById('usrCompany').value : null;
   const max_exemptedHours = (role === 'Validator' || role === 'BuildingAdmin') ? parseInt(document.getElementById('usrMaxExemptHours').value) : null;
 
-  if (!username || !role || (!isAD && !pass)) {
+  if (!username) {
+    alert("กรุณาระบุชื่อผู้ใช้งาน (ชื่อผู้ใช้งานห้ามเป็นค่าว่าง)!");
+    document.getElementById('usrUsername').focus();
+    return;
+  }
+
+  // Reflect the cleaned username back into the form field
+  document.getElementById('usrUsername').value = username;
+
+  if (!role || (!isAD && !pass)) {
     alert("กรุณากรอกข้อมูลที่สำคัญให้ครบถ้วน!");
     return;
   }
@@ -2364,7 +2383,8 @@ function renderCompaniesTable() {
 
 async function saveCompany() {
   const id = document.getElementById('companyId').value;
-  const code = document.getElementById('compCode').value.trim();
+  // Strip ALL spaces from the company code before saving
+  const code = document.getElementById('compCode').value.replace(/\s/g, '');
   const name = document.getElementById('compName').value.trim();
 
   if (!code) {
@@ -2372,11 +2392,10 @@ async function saveCompany() {
     document.getElementById('compCode').focus();
     return;
   }
-  if (/\s/.test(code)) {
-    alert("รหัสบริษัทห้ามมีช่องว่าง (space)!");
-    document.getElementById('compCode').focus();
-    return;
-  }
+
+  // Reflect the cleaned code back into the form field
+  document.getElementById('compCode').value = code;
+
   if (!name) {
     alert("กรุณาระบุชื่อบริษัท!");
     document.getElementById('compName').focus();

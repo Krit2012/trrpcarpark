@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>TRRP Car Park v1.4.6 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
+  <title>TRRP Car Park v1.4.7 - ระบบบริหารจัดการลานจอดรถอัจฉริยะ</title>
   <meta name="description" content="ระบบจัดการที่จอดรถ เช็คอิน-เช็คเอาท์ คิดเงินค่าบริการ และพนักงานรายเดือนแบบเรียลไทม์">
   
   <!-- Google Fonts -->
@@ -30,7 +30,7 @@
     <div class="login-card">
       <div class="login-logo-header">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
-        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.6</span></h2>
+        <h2>TRRP Car Park <span style="font-size:13px; font-weight:600; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.7</span></h2>
         <p>ระบบจัดการและคิดเงินค่าจอดรถอัจฉริยะ</p>
       </div>
       
@@ -64,7 +64,7 @@
       <div class="brand">
         <img src="logo.jpg" alt="Logo" class="brand-logo">
         <div>
-          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.6</span></h1>
+          <h1 class="brand-name">TRRP Car Park <span style="font-size:13px; font-weight:600; letter-spacing:0; color: var(--primary); background: none; -webkit-text-fill-color: var(--primary);">v1.4.7</span></h1>
           <p class="brand-sub">ระบบบริหารจัดการที่จอดรถและคำนวณค่าบริการอัจฉริยะ</p>
         </div>
       </div>
@@ -112,7 +112,7 @@
           <form id="checkInForm" onsubmit="event.preventDefault(); submitCheckIn();">
             <div class="form-group">
               <label for="chkInPlate">ทะเบียนรถ (License Plate)*</label>
-              <input type="text" id="chkInPlate" class="input-field input-large" placeholder="ตัวอย่าง: 1กก1111 กรุงเทพฯ" required>
+              <input type="text" id="chkInPlate" class="input-field input-large" placeholder="ตัวอย่าง: 1กก1111" required oninput="this.value=this.value.replace(/\s/g,'')">
             </div>
 
 
@@ -520,7 +520,7 @@
             
             <div class="form-group">
               <label for="usrUsername">ชื่อผู้ใช้งาน (Username)*</label>
-              <input type="text" id="usrUsername" class="input-field" placeholder="เช่น somchai" required>
+              <input type="text" id="usrUsername" class="input-field" placeholder="เช่น somchai" required oninput="this.value=this.value.replace(/\s/g,'')">
             </div>
 
             <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
@@ -606,7 +606,7 @@
             
             <div class="form-group">
               <label for="compCode">รหัสบริษัท (Company Code)*</label>
-              <input type="text" id="compCode" class="input-field" placeholder="เช่น ADV" required>
+              <input type="text" id="compCode" class="input-field" placeholder="เช่น ADV" required oninput="this.value=this.value.replace(/\s/g,'')">
             </div>
 
             <div class="form-group">
@@ -784,6 +784,6 @@
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Core Script with Version Cache Buster -->
-  <script src="app.js?v=1.4.6"></script>
+  <script src="app.js?v=1.4.7"></script>
 </body>
 </html>
